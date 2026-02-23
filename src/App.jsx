@@ -547,6 +547,63 @@ const ListingCard = ({ item, onClick }) => {
 };
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+const LoginScreen = ({ onLogin }) => {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  const handleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      onLogin(data.user);
+    } catch (e) {
+      setError('Invalid email or password');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ fontFamily:"'DM Sans',sans-serif", minHeight:"100vh", background:"#0C0E14", color:"#F0EEE8", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ background:"#13151C", border:"1px solid #252830", borderRadius:16, padding:32, width:"100%", maxWidth:380 }}>
+        <div style={{ fontSize:32, fontWeight:900, color:"#F59E0B", marginBottom:4 }}>🏪 Leasio</div>
+        <div style={{ color:"#6B7280", marginBottom:24, fontSize:13 }}>Sign in to continue</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            <span style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase" }}>Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="test@leasio.in"
+              style={{ background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif" }}
+            />
+          </label>
+          <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            <span style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase" }}>Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              style={{ background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif" }}
+            />
+          </label>
+          {error && <div style={{ color:"#EF4444", fontSize:12 }}>{error}</div>}
+          <button
+            onClick={handleLogin}
+            disabled={loading || !email || !password}
+            style={{ background:"#F59E0B", color:"#0C0E14", border:"none", borderRadius:9, padding:"11px 18px", cursor:"pointer", fontWeight:700, fontSize:14, fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
+            {loading ? 'Signing in...' : 'Sign In →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 export default function Leasio() {
   const [listings, setListings] = useState([]);
 
@@ -611,6 +668,7 @@ useEffect(() => {
     setView("orders");
   };
 
+  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
   const filtered = listings.filter(l => {
     const ms = l.title.toLowerCase().includes(search.toLowerCase()) || l.description.toLowerCase().includes(search.toLowerCase());
     const mlt = filterLT === "all" || l.listingType === filterLT;
