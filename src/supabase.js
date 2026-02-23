@@ -5,8 +5,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Get these from: Supabase Dashboard → Project Settings → API
-const SUPABASE_URL = 'https://ldhvmfjjpwdrjxjftarq.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkaHZtZmpqcHdkcmp4amZ0YXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0ODE0OTcsImV4cCI6MjA4NzA1NzQ5N30.tc2B0iWtUSAEXLHvCBHH3CYiPzwy5dlCDtRjcP-i0B4';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const CLOUDINARY_CLOUD = import.meta.env.VITE_CLOUDINARY_CLOUD;
+
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -269,7 +271,7 @@ export async function confirmReturn(bookingId, hasDispute = false) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Your Cloudinary upload preset (unsigned) — set up in Cloudinary dashboard
-const CLOUDINARY_CLOUD = 'dl3whvu6p';
+//const CLOUDINARY_CLOUD = 'dl3whvu6p';
 const CLOUDINARY_PRESET = 'leasio_conditions';  // unsigned preset
 
 export async function uploadConditionPhoto(file, bookingId, phase) {
