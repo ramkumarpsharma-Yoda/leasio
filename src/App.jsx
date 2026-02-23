@@ -408,11 +408,26 @@ const PurchaseModal = ({ listing, onClose, onPurchased }) => {
   const platformCut = Math.round(price * 0.01);
 
   const confirm = () => {
-    // Simulated payment for POC — replace with real Razorpay backend later
-    setPaid(true);
-    setStep(3);
-    onPurchased?.({ listing, price, platformCut, ...form, type:'purchase' });
-    toast("✅ Payment simulated — booking confirmed!");
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    document.body.appendChild(script);
+    script.onload = () => {
+      const options = {
+        key: 'rzp_test_SHwlf6Ln7T1FjV',
+        amount: price * 100,
+        currency: 'INR',
+        name: 'Leasio',
+        description: listing.title,
+        theme: { color: '#10B981' },
+        handler: function(response) {
+          setPaid(true);
+          setStep(3);
+          onPurchased?.({ listing, price, platformCut, ...form, type:'purchase', razorpay_payment_id: response.razorpay_payment_id });
+        },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    };
   };
 
   return (
