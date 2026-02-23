@@ -549,10 +549,10 @@ const ListingCard = ({ item, onClick }) => {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }) => {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleLogin = async () => {
     setLoading(true);
