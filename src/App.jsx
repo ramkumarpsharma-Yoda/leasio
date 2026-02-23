@@ -640,84 +640,7 @@ const LoginScreen = ({ onLogin }) => {
     </div>
   );
 };
-export default function Leasio() {
-  const [listings, setListings] = useState([]);
-
-useEffect(() => {
-  fetchListings()
-    .then(data => setListings(data))
-    .catch(err => console.error('Failed to load listings:', err));
-}, []);
-  const [view, setView] = useState("browse");
-  const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState("");
-  const [locality, setLocality] = useState("");
-  const [filterLT, setFilterLT] = useState("all");
-  const [filterSale, setFilterSale] = useState(false); // true = show "For Sale" items only
-  const [filterCat, setFilterCat] = useState("All");
-  const [toasts, setToasts] = useState([]);
-  const [bookingModal, setBookingModal] = useState(null);
-  const [buyModal, setBuyModal] = useState(null);
-  const [orders, setOrders] = useState([]);
-const [currentUser, setCurrentUser] = useState(null);
-
-useEffect(() => {
-  supabase.auth.getUser().then(({ data: { user } }) => {
-    setCurrentUser(user);
-  });
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    (_event, session) => setCurrentUser(session?.user ?? null)
-  );
-  return () => subscription.unsubscribe();
-}, []);
-
-useEffect(() => {
-  if (!currentUser) return;
-  fetchMyBookings(currentUser.id).then(setOrders);
-}, [currentUser]);
-  const [myAddress] = useState("");
-  const [listForm, setListForm] = useState({
-    listingType: "item", title: "", category: "Electronics", subtype: "rent",
-    ownerType: "individual", emoji: "📦", locality: "", description: "",
-    rentPrice: "", priceHour: "", priceHalfDay: "", priceFullDay: "",
-    deposit: "", buyPrice: "", minDays: 1, minHours: 1,
-    totalQty: 1, daysAvailable: [], travelRadius: 10, capacity: ""
-  });
-
-  useEffect(() => {
-    const l = document.createElement("link");
-    l.href = "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap";
-    l.rel = "stylesheet"; document.head.appendChild(l);
-  }, []);
-
-  const toast = msg => { const id = Date.now(); setToasts(t => [...t, { id, msg }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4000); };
-
-  const handleBooked = (order) => {
-    setOrders(o => [...o, order]);
-    // Decrement availability
-    setListings(ls => ls.map(l => {
-      if (l.id !== order.listing.id) return l;
-      const newQty = Math.max(0, l.availableQty - (order.qty || 1));
-      return { ...l, availableQty: newQty, available: newQty > 0 };
-    }));
-    toast(`✅ Booking confirmed! ${order.mode === "app" ? "Delivery slot locked." : "Owner address unlocked."}`);
-    setView("orders");
-  };
-
-  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
-  const filtered = listings.filter(l => {
-    const ms = l.title.toLowerCase().includes(search.toLowerCase()) || l.description.toLowerCase().includes(search.toLowerCase());
-    const mlt = filterLT === "all" || l.listingType === filterLT;
-    const ml = !locality || l.locality.toLowerCase().includes(locality.toLowerCase());
-    const mc = filterCat === "All" || l.category === filterCat;
-    const mSale = !filterSale || (l.listingType === "item" && (l.subtype === "buy" || l.subtype === "both"));
-    return ms && mlt && ml && mc && mSale;
-  });
-
-  const allCats = [...new Set(listings.map(l => l.category))];
-
-  // ── LIST FORM ──────────────────────────────────────────────────────────────
-  const ListForm = () => {
+  const ListForm = ({ listForm, setListForm, setListings, setView, toast }) => {
     const lt = listForm.listingType;
     const emojis = ["📦","🪑","🔧","📷","🔊","⛺","💒","⚽","🎉","🏟","🧘","📸","🚗","💡","🎸"];
     const toggleDay = d => setListForm(f => ({ ...f, daysAvailable: f.daysAvailable.includes(d) ? f.daysAvailable.filter(x => x !== d) : [...f.daysAvailable, d] }));
@@ -826,6 +749,84 @@ useEffect(() => {
       </div>
     );
   };
+export default function Leasio() {
+  const [listings, setListings] = useState([]);
+
+useEffect(() => {
+  fetchListings()
+    .then(data => setListings(data))
+    .catch(err => console.error('Failed to load listings:', err));
+}, []);
+  const [view, setView] = useState("browse");
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const [locality, setLocality] = useState("");
+  const [filterLT, setFilterLT] = useState("all");
+  const [filterSale, setFilterSale] = useState(false); // true = show "For Sale" items only
+  const [filterCat, setFilterCat] = useState("All");
+  const [toasts, setToasts] = useState([]);
+  const [bookingModal, setBookingModal] = useState(null);
+  const [buyModal, setBuyModal] = useState(null);
+  const [orders, setOrders] = useState([]);
+const [currentUser, setCurrentUser] = useState(null);
+
+useEffect(() => {
+  supabase.auth.getUser().then(({ data: { user } }) => {
+    setCurrentUser(user);
+  });
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    (_event, session) => setCurrentUser(session?.user ?? null)
+  );
+  return () => subscription.unsubscribe();
+}, []);
+
+useEffect(() => {
+  if (!currentUser) return;
+  fetchMyBookings(currentUser.id).then(setOrders);
+}, [currentUser]);
+  const [myAddress] = useState("");
+  const [listForm, setListForm] = useState({
+    listingType: "item", title: "", category: "Electronics", subtype: "rent",
+    ownerType: "individual", emoji: "📦", locality: "", description: "",
+    rentPrice: "", priceHour: "", priceHalfDay: "", priceFullDay: "",
+    deposit: "", buyPrice: "", minDays: 1, minHours: 1,
+    totalQty: 1, daysAvailable: [], travelRadius: 10, capacity: ""
+  });
+
+  useEffect(() => {
+    const l = document.createElement("link");
+    l.href = "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap";
+    l.rel = "stylesheet"; document.head.appendChild(l);
+  }, []);
+
+  const toast = msg => { const id = Date.now(); setToasts(t => [...t, { id, msg }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4000); };
+
+  const handleBooked = (order) => {
+    setOrders(o => [...o, order]);
+    // Decrement availability
+    setListings(ls => ls.map(l => {
+      if (l.id !== order.listing.id) return l;
+      const newQty = Math.max(0, l.availableQty - (order.qty || 1));
+      return { ...l, availableQty: newQty, available: newQty > 0 };
+    }));
+    toast(`✅ Booking confirmed! ${order.mode === "app" ? "Delivery slot locked." : "Owner address unlocked."}`);
+    setView("orders");
+  };
+
+  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
+  const filtered = listings.filter(l => {
+    const ms = l.title.toLowerCase().includes(search.toLowerCase()) || l.description.toLowerCase().includes(search.toLowerCase());
+    const mlt = filterLT === "all" || l.listingType === filterLT;
+    const ml = !locality || l.locality.toLowerCase().includes(locality.toLowerCase());
+    const mc = filterCat === "All" || l.category === filterCat;
+    const mSale = !filterSale || (l.listingType === "item" && (l.subtype === "buy" || l.subtype === "both"));
+    return ms && mlt && ml && mc && mSale;
+  });
+
+  const allCats = [...new Set(listings.map(l => l.category))];
+
+  // ── LIST FORM ──────────────────────────────────────────────────────────────
+
 
   // ── ORDERS VIEW ────────────────────────────────────────────────────────────
   const OrdersView = () => (
@@ -1033,7 +1034,7 @@ useEffect(() => {
         </div>
       )}
 
-      {selected ? <ItemDetail /> : view === "browse" ? <BrowseView /> : view === "list" ? <ListForm /> : <OrdersView />}
+      {selected ? <ItemDetail /> : view === "browse" ? <BrowseView /> : view === "list" ? <ListForm listForm={listForm} setListForm={setListForm} setListings={setListings} setView={setView} toast={toast} />
 
       {bookingModal && <BookingModal listing={bookingModal} onClose={() => setBookingModal(null)} onBooked={handleBooked} myAddress={myAddress} />}
       {buyModal && <PurchaseModal listing={buyModal} onClose={() => setBuyModal(null)} onPurchased={order => { setOrders(o => [...o, {...order, id:"pur"+Date.now(), status:"purchased"}]); setListings(ls => ls.map(l => l.id === buyModal.id ? {...l, availableQty: Math.max(0, l.availableQty-1)} : l)); toast("✅ Purchase confirmed! Seller address unlocked."); setView("orders"); setBuyModal(null); }} />}
