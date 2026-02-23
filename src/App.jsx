@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, fetchListings, createBooking, fetchMyBookings } from './supabase.js';
 
 
@@ -717,7 +717,7 @@ useEffect(() => {
   const allCats = [...new Set(listings.map(l => l.category))];
 
   // ── LIST FORM ──────────────────────────────────────────────────────────────
-  const ListForm = () => {
+  const ListForm = useCallback(() => {
     const lt = listForm.listingType;
     const emojis = ["📦","🪑","🔧","📷","🔊","⛺","💒","⚽","🎉","🏟","🧘","📸","🚗","💡","🎸"];
     const toggleDay = d => setListForm(f => ({ ...f, daysAvailable: f.daysAvailable.includes(d) ? f.daysAvailable.filter(x => x !== d) : [...f.daysAvailable, d] }));
@@ -825,7 +825,7 @@ useEffect(() => {
         </div>
       </div>
     );
-  };
+  }, [listForm]);
 
   // ── ORDERS VIEW ────────────────────────────────────────────────────────────
   const OrdersView = () => (
