@@ -564,6 +564,7 @@ const ListingCard = ({ item, onClick }) => {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }) => {
+  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -582,11 +583,30 @@ const LoginScreen = ({ onLogin }) => {
     setLoading(false);
   };
 
+  const handleSignup = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+      onLogin(data.user);
+    } catch (e) {
+      setError('Signup failed: ' + e.message);
+    }
+    setLoading(false);
+  };
+
   return (
     <div style={{ fontFamily:"'DM Sans',sans-serif", minHeight:"100vh", background:"#0C0E14", color:"#F0EEE8", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{ background:"#13151C", border:"1px solid #252830", borderRadius:16, padding:32, width:"100%", maxWidth:380 }}>
         <div style={{ fontSize:32, fontWeight:900, color:"#F59E0B", marginBottom:4 }}>🏪 Leasio</div>
-        <div style={{ color:"#6B7280", marginBottom:24, fontSize:13 }}>Sign in to continue</div>
+        <div style={{ color:"#6B7280", marginBottom:20, fontSize:13 }}>{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</div>
+
+        <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+          <button onClick={() => setMode('login')} style={{ flex:1, background:mode==='login'?"#F59E0B":"#111318", color:mode==='login'?"#0C0E14":"#9CA3AF", border:"1px solid #252830", borderRadius:8, padding:"8px", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>Sign In</button>
+          <button onClick={() => setMode('signup')} style={{ flex:1, background:mode==='signup'?"#F59E0B":"#111318", color:mode==='signup'?"#0C0E14":"#9CA3AF", border:"1px solid #252830", borderRadius:8, padding:"8px", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>Sign Up</button>
+        </div>
+
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
             <span style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase" }}>Email</span>
@@ -594,8 +614,8 @@ const LoginScreen = ({ onLogin }) => {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="test@leasio.in"
-              style={{ background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif" }}
+              placeholder="you@example.com"
+              style={{ background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif", width:"100%", boxSizing:"border-box" }}
             />
           </label>
           <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
@@ -605,15 +625,15 @@ const LoginScreen = ({ onLogin }) => {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
-              style={{ background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif" }}
+              style={{ background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif", width:"100%", boxSizing:"border-box" }}
             />
           </label>
           {error && <div style={{ color:"#EF4444", fontSize:12 }}>{error}</div>}
           <button
-            onClick={handleLogin}
+            onClick={mode === 'login' ? handleLogin : handleSignup}
             disabled={loading || !email || !password}
             style={{ background:"#F59E0B", color:"#0C0E14", border:"none", borderRadius:9, padding:"11px 18px", cursor:"pointer", fontWeight:700, fontSize:14, fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
-            {loading ? 'Signing in...' : 'Sign In →'}
+            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In →' : 'Create Account →'}
           </button>
         </div>
       </div>
