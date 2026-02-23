@@ -155,7 +155,7 @@ const BookingModal = ({ listing, onClose, onBooked, myAddress, setMyAddress }) =
 
   const payPreDeposit = () => {
   const options = {
-    key: 'rzp_test_YOUR_KEY_ID',  // paste your Razorpay Test Key ID from Step 4
+    key: 'rzp_test_SHwlf6Ln7T1FjV',  // paste your Razorpay Test Key ID from Step 4
     amount: Math.max(preDep, 100) * 100,  // Razorpay takes amount in paise
     currency: 'INR',
     name: 'Leasio',
