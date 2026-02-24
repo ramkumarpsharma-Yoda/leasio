@@ -938,7 +938,7 @@ export default function Leasio() {
           renter_phone: order.renterPhone,
           renter_address: order.renterAddress,
         }]);
-      } catch(e) { console.error('Booking save failed:', e); }
+      } catch(e) { console.error('Booking save failed:', e.message, e); alert('Booking save error: ' + e.message); }
     }
     setOrders(o => [...o, order]);
     setListings(ls => ls.map(l => {
