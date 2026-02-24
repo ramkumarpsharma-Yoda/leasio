@@ -926,8 +926,7 @@ useEffect(() => {
         </div>
       )}
 
-      {selected ? <ItemDetail /> : view === "browse" ? <BrowseView /> : view === "list" ? <ListForm setListings={setListings} setView={setView} toast={toast} />
-
+      {selected ? <ItemDetail /> : view === "browse" ? <BrowseView /> : view === "list" ? <ListForm setListings={setListings} setView={setView} toast={toast} /> : <OrdersView />}
       {bookingModal && <BookingModal listing={bookingModal} onClose={() => setBookingModal(null)} onBooked={handleBooked} myAddress={myAddress} />}
       {buyModal && <PurchaseModal listing={buyModal} onClose={() => setBuyModal(null)} onPurchased={order => { setOrders(o => [...o, {...order, id:"pur"+Date.now(), status:"purchased"}]); setListings(ls => ls.map(l => l.id === buyModal.id ? {...l, availableQty: Math.max(0, l.availableQty-1)} : l)); toast("✅ Purchase confirmed! Seller address unlocked."); setView("orders"); setBuyModal(null); }} />}
 
