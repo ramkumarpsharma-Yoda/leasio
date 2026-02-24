@@ -710,7 +710,7 @@ useEffect(() => {
   const filtered = listings.filter(l => {
     const ms = l.title.toLowerCase().includes(search.toLowerCase()) || l.description.toLowerCase().includes(search.toLowerCase());
     const mlt = filterLT === "all" || l.listingType === filterLT;
-    const ml = !locality || l.locality.toLowerCase().includes(locality.toLowerCase()) || l.city.toLowerCase().includes(locality.toLowerCase());
+    const ml = !localityInput  || l.locality.toLowerCase().includes(localityInput.toLowerCase()) || l.city.toLowerCase().includes(locality.toLowerCase());
     const mc = filterCat === "All" || l.category === filterCat;
     const mSale = !filterSale || (l.listingType === "item" && (l.subtype === "buy" || l.subtype === "both"));
     return ms && mlt && ml && mc && mSale;
@@ -865,6 +865,7 @@ useEffect(() => {
   defaultValue={locality}
   key={locality}
   onChange={e => setLocality(e.target.value)}
+  onBlur={e => setLocality(e.target.value)}
 />
           <button onClick={() => navigator.geolocation?.getCurrentPosition(p => { const loc = `${p.coords.latitude.toFixed(2)}°N`; setLocality(loc); setLocalityInput(loc); toast("📍 GPS detected!"); })} style={{ background: "none", border: "none", color: "#F59E0B", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans',sans-serif" }}>GPS</button>
         </div>
