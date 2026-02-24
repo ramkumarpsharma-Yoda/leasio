@@ -1,4 +1,11 @@
 const ListForm = ({ setListings, setView, toast }) => {
+    const [listForm, setListForm] = useState({
+  listingType: "item", title: "", category: "Electronics", subtype: "rent",
+  ownerType: "individual", emoji: "📦", locality: "", description: "",
+  rentPrice: "", priceHour: "", priceHalfDay: "", priceFullDay: "",
+  deposit: "", buyPrice: "", minDays: 1, minHours: 1,
+  totalQty: 1, daysAvailable: [], travelRadius: 10, capacity: ""
+});
     const lt = listForm.listingType;
     const emojis = ["📦","🪑","🔧","📷","🔊","⛺","💒","⚽","🎉","🏟","🧘","📸","🚗","💡","🎸"];
     const toggleDay = d => setListForm(f => ({ ...f, daysAvailable: f.daysAvailable.includes(d) ? f.daysAvailable.filter(x => x !== d) : [...f.daysAvailable, d] }));
