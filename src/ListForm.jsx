@@ -1,4 +1,36 @@
 import React, { useState } from "react";
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const CATS_ITEM = ["Furniture","Tools","Electronics","Outdoor","Event","Vehicles","Other"];
+const CATS_VENUE = ["Marriage Hall","Party Hall","Playground","Sports Court","Conference Room","Farmhouse","Other"];
+const CATS_SERVICE = ["Sports Coach","Music Teacher","Yoga Instructor","Personal Trainer","Tutor","Chef","Photographer","Other"];
+const typeStyle = { item: { color: "#F59E0B", label: "Item" }, venue: { color: "#6366F1", label: "Venue" }, service: { color: "#10B981", label: "Service" } };
+
+const Inp = ({ label, ...p }) => (
+  <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    {label && <span style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: .7, textTransform: "uppercase" }}>{label}</span>}
+    <input style={{ background: "#111318", border: "1px solid #252830", borderRadius: 9, padding: "10px 13px", color: "#F0EEE8", fontSize: 13, outline: "none", fontFamily: "'DM Sans',sans-serif", width: "100%", boxSizing: "border-box" }} {...p} />
+  </label>
+);
+
+const Textarea = ({ label, ...p }) => (
+  <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    {label && <span style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: .7, textTransform: "uppercase" }}>{label}</span>}
+    <textarea style={{ background: "#111318", border: "1px solid #252830", borderRadius: 9, padding: "10px 13px", color: "#F0EEE8", fontSize: 13, outline: "none", fontFamily: "'DM Sans',sans-serif", resize: "none", height: 80, width: "100%", boxSizing: "border-box" }} {...p} />
+  </label>
+);
+
+const Btn = ({ variant = "primary", children, style: s = {}, ...p }) => {
+  const m = { primary: { bg: "#F59E0B", c: "#0C0E14" }, success: { bg: "#10B981", c: "#fff" }, ghost: { bg: "#1C1F27", c: "#C0C8D8" } }[variant] || { bg: "#F59E0B", c: "#0C0E14" };
+  return <button style={{ background: m.bg, color: m.c, border: "none", borderRadius: 9, padding: "9px 18px", cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily: "'DM Sans',sans-serif", ...s }} {...p}>{children}</button>;
+};
+
+const InfoBox = ({ color = "#10B981", icon, label, sub, children }) => (
+  <div style={{ background: color + "12", border: `1.5px solid ${color}35`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+    {label && <div style={{ fontSize: 11, fontWeight: 800, color, marginBottom: 3, letterSpacing: .6 }}>{icon} {label}</div>}
+    {sub && <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 8, lineHeight: 1.5 }}>{sub}</div>}
+    {children}
+  </div>
+);
 const ListForm = ({ setListings, setView, toast }) => {
     const [listForm, setListForm] = useState({
   listingType: "item", title: "", category: "Electronics", subtype: "rent",
