@@ -100,6 +100,7 @@ export async function createListing(listing, ownerId) {
       emoji:          listing.emoji,
       locality:       listing.locality,
       city:           listing.city || 'Bengaluru',
+      contact_phone:  listing.phone,
       full_address:   listing.fullAddress,   // stored but hidden from public
       rent_price:     listing.rentPrice   || null,
       buy_price:      listing.buyPrice    || null,
@@ -364,6 +365,7 @@ function mapListing(row) {
     city:           row.city,
     // full_address intentionally NOT mapped here — only revealed post-deposit
     owner:          row.profiles?.full_name || 'Unknown',
+    ownerPhone:     row.contact_phone || row.profiles?.phone || '+91 9876543210', // <--- ADD THIS LINE
     ownerId:        row.owner_id,
     ownerType:      row.profiles?.owner_type || 'individual',
     ownerTrust:     row.profiles?.trust_score || 4.0,
