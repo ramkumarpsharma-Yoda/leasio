@@ -940,7 +940,7 @@ export default function Leasio() {
         }]); 
         console.log('Saved booking:', savedBooking, 'Error:', saveError);
 if (saveError) alert('Save error: ' + saveError.message);
-      } catch(e) { console.error('Booking save failed:', e.message, e); alert('Booking save error: ' + e.message); }
+      } catch(e) { console.error('Booking save failed:', e.message, e); alert('Booking save error: ' + e.message);return; }
     }
     setOrders(o => [...o, order]);
     setListings(ls => ls.map(l => {
