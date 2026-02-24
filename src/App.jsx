@@ -157,6 +157,24 @@ const BookingModal = ({ listing, onClose, onBooked, myAddress, setMyAddress }) =
         handler: function(response) {
           setPreDepPaid(true);
           setStep(5);
+          // Auto confirm booking after payment
+          setTimeout(() => {
+            const order = {
+              id: "ord" + Date.now(),
+              listing,
+              total,
+              fee,
+              dep,
+              mode: bookForm.mode,
+              status: "pending_handover",
+              depositStatus: "held",
+              ownerAddress: listing.full_address || listing.locality + ", " + (listing.city || "Bengaluru"),
+              ownerPhone: "+91 98765 43210",
+              ...bookForm
+            };
+            onBooked?.(order);
+            onClose?.();
+          }, 3000);
         },
       };
       const rzp = new window.Razorpay(options);
@@ -697,6 +715,7 @@ const OrdersView = ({ orders, setView }) => (
           {!isPurchase && order.deliverySlot && <div style={{ marginTop: 8, fontSize: 12, color: "#2563EB", fontWeight: 700 }}>🚚 Delivery: {order.deliverySlot}</div>}
           {!isPurchase && order.slot && <div style={{ marginTop: 4, fontSize: 12, color: "#6B7280" }}>⏰ Slot: {order.slot}</div>}
           {!isPurchase && order.hours && <div style={{ marginTop: 4, fontSize: 12, color: "#6B7280" }}>⏱ Duration: {order.hours} hours</div>}
+          {!isPurchase && order.ownerAddress && <div style={{ marginTop: 6, fontSize: 12, color: "#9CA3AF" }}>📍 Owner: {order.ownerAddress} · {order.ownerPhone}</div>}
           {isPurchase && <div style={{ marginTop: 8, fontSize: 12, color: "#10B981" }}>✅ Seller address unlocked · Confirm receipt in app to release payment</div>}
         </div>
       );
