@@ -233,7 +233,7 @@ export async function fetchMyBookings(renterId) {
       city: b.listings.city,
       full_address: b.listings.full_address,
       owner: b.listings.profiles?.full_name || 'Owner',
-      ownerPhone: b.listings.profiles?.phone || '+91 98765 43210',
+      ownerPhone: row.contact_phone || row.profiles?.phone,
     } : null,
     total: b.total_rent,
     fee: b.platform_fee,

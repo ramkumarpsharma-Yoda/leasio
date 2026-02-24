@@ -38,7 +38,8 @@ const ListForm = ({ setListings, setView, toast }) => {
   ownerType: "individual", emoji: "📦", locality: "", description: "",
   rentPrice: "", priceHour: "", priceHalfDay: "", priceFullDay: "",
   deposit: "", buyPrice: "", minDays: 1, minHours: 1,
-  totalQty: 1, daysAvailable: [], travelRadius: 10, capacity: ""
+  totalQty: 1, daysAvailable: [], travelRadius: 10, capacity: "",
+  city: "", fullAddress: "", phone: "" // <--- ADDED THESE THREE
 });
     const lt = listForm.listingType;
     const emojis = ["📦","🪑","🔧","📷","🔊","⛺","💒","⚽","🎉","🏟","🧘","📸","🚗","💡","🎸"];
@@ -54,7 +55,12 @@ const ListForm = ({ setListings, setView, toast }) => {
     description: listForm.description,
     emoji: listForm.emoji,
     locality: listForm.locality,
-    city: 'Bengaluru',
+    city: listForm.city,
+    full_address: listForm.fullAddress, // <--- ADDED FULL ADDRESS
+    // Note: If your listings table doesn't have a 'contact_phone' column yet, 
+    // you MUST add it in your Supabase dashboard for this next line to work:
+    contact_phone: listForm.phone,   
+   
     rent_price: listForm.rentPrice ? Number(listForm.rentPrice) : null,
     buy_price: listForm.buyPrice ? Number(listForm.buyPrice) : null,
     deposit: Number(listForm.deposit) || 0,
@@ -168,7 +174,14 @@ const ListForm = ({ setListings, setView, toast }) => {
             </div>
           </>}
 
-          <Inp label="Locality (shown publicly)" placeholder="e.g. Koramangala" value={listForm.locality} onChange={e => setListForm(f => ({ ...f, locality: e.target.value }))} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Inp label="City" placeholder="e.g. Mumbai" value={listForm.city} onChange={e => setListForm(f => ({ ...f, city: e.target.value }))} />
+            <Inp label="Locality (shown publicly)" placeholder="e.g. Andheri West" value={listForm.locality} onChange={e => setListForm(f => ({ ...f, locality: e.target.value }))} />
+          </div>
+          
+          <Inp label="Full Address (Private)" placeholder="House no, Street, etc." value={listForm.fullAddress} onChange={e => setListForm(f => ({ ...f, fullAddress: e.target.value }))} />
+          <Inp label="Contact Phone Number" placeholder="+91 9876543210" value={listForm.phone} onChange={e => setListForm(f => ({ ...f, phone: e.target.value }))} />
+          
           <InfoBox color="#F59E0B" icon="🔒" label="FULL ADDRESS IS PRIVATE" sub="Only your locality is shown publicly. Full address is revealed only to confirmed renters who have paid the 20% pre-booking deposit." />
           <Textarea label="Description" value={listForm.description} onChange={e => setListForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe your listing, condition, rules, etc." />
           <Btn variant="primary" style={{ padding: "12px 18px" }} disabled={!listForm.title || !listForm.locality} onClick={submit}>🚀 Publish Listing</Btn>
