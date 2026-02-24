@@ -921,7 +921,7 @@ export default function Leasio() {
     // Save to Supabase
     if (currentUser) {
       try {
-        await supabase.from('bookings').insert([{
+        const { data: savedBooking, error: saveError } = await supabase.from('bookings').insert([{
           listing_id: order.listing.id,
           renter_id: currentUser.id,
           booking_type: order.listing.listingType,
@@ -937,7 +937,9 @@ export default function Leasio() {
           renter_name: order.renterName,
           renter_phone: order.renterPhone,
           renter_address: order.renterAddress,
-        }]);
+        }]); 
+        console.log('Saved booking:', savedBooking, 'Error:', saveError);
+if (saveError) alert('Save error: ' + saveError.message);
       } catch(e) { console.error('Booking save failed:', e.message, e); alert('Booking save error: ' + e.message); }
     }
     setOrders(o => [...o, order]);
