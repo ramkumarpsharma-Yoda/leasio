@@ -858,8 +858,13 @@ useEffect(() => {
         <input style={{ flex: 1, minWidth: 200, background: "#111318", border: "1px solid #252830", borderRadius: 9, padding: "9px 14px", color: "#F0EEE8", fontSize: 13, outline: "none", fontFamily: "'DM Sans',sans-serif" }} placeholder="🔍 Search items, venues, services..." value={search} onChange={e => setSearch(e.target.value)} />
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#111318", border: "1px solid #252830", borderRadius: 9, padding: "0 12px" }}>
           <span>📍</span>
-          <input style={{ background: "none", border: "none", color: "#F0EEE8", fontSize: 13, outline: "none", width: 140, fontFamily: "'DM Sans',sans-serif" }} placeholder="Locality" value={locality} defaultValue={locality}
-onBlur={e => setLocality(e.target.value)} />
+          <input
+  style={{ background: "none", border: "none", color: "#F0EEE8", fontSize: 13, outline: "none", width: 140, fontFamily: "'DM Sans',sans-serif" }}
+  placeholder="Locality"
+  defaultValue={locality}
+  key={locality}
+  onBlur={e => setLocality(e.target.value)}
+/>
           <button onClick={() => navigator.geolocation?.getCurrentPosition(p => { setLocality(`${p.coords.latitude.toFixed(2)}°N`); toast("📍 GPS detected!"); })} style={{ background: "none", border: "none", color: "#F59E0B", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans',sans-serif" }}>GPS</button>
         </div>
       </div>
