@@ -1,3 +1,4 @@
+import { supabase } from './supabase.js';
 import React, { useState } from "react";
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const CATS_ITEM = ["Furniture","Tools","Electronics","Outdoor","Event","Vehicles","Other"];
@@ -42,15 +43,43 @@ const ListForm = ({ setListings, setView, toast }) => {
     const lt = listForm.listingType;
     const emojis = ["📦","🪑","🔧","📷","🔊","⛺","💒","⚽","🎉","🏟","🧘","📸","🚗","💡","🎸"];
     const toggleDay = d => setListForm(f => ({ ...f, daysAvailable: f.daysAvailable.includes(d) ? f.daysAvailable.filter(x => x !== d) : [...f.daysAvailable, d] }));
-    const submit = () => {
-      const base = { ...listForm, id: Date.now(), ownerTrust: 4.0, rating: 0, reviews: 0, verified: false, listingTrust: 4.0, available: true, availableQty: Number(listForm.totalQty) || 1, bookedDates: [], bookedSlots: {} };
-      if (lt === "item") { base.rentPrice = Number(listForm.rentPrice); base.deposit = Number(listForm.deposit); base.buyPrice = listForm.buyPrice ? Number(listForm.buyPrice) : null; }
-      if (lt === "venue") { base.priceHour = Number(listForm.priceHour); base.priceHalfDay = Number(listForm.priceHalfDay); base.priceFullDay = Number(listForm.priceFullDay); base.deposit = Number(listForm.deposit); base.capacity = Number(listForm.capacity); }
-      if (lt === "service") { base.priceHour = Number(listForm.priceHour); base.minHours = Number(listForm.minHours); base.travelRadius = Number(listForm.travelRadius); base.deposit = 0; }
-      setListings(ls => [...ls, base]);
-      toast("🎉 Listing live!");
-      setView("browse");
-    };
+    const submit = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  const base = {
+    owner_id: user.id,
+    listing_type: listForm.listingType,
+    subtype: listForm.subtype,
+    category: listForm.category,
+    title: listForm.title,
+    description: listForm.description,
+    emoji: listForm.emoji,
+    locality: listForm.locality,
+    city: 'Bengaluru',
+    rent_price: listForm.rentPrice ? Number(listForm.rentPrice) : null,
+    buy_price: listForm.buyPrice ? Number(listForm.buyPrice) : null,
+    deposit: Number(listForm.deposit) || 0,
+    min_days: Number(listForm.minDays) || 1,
+    total_qty: Number(listForm.totalQty) || 1,
+    available_qty: Number(listForm.totalQty) || 1,
+    price_hour: listForm.priceHour ? Number(listForm.priceHour) : null,
+    price_half_day: listForm.priceHalfDay ? Number(listForm.priceHalfDay) : null,
+    price_full_day: listForm.priceFullDay ? Number(listForm.priceFullDay) : null,
+    capacity: listForm.capacity ? Number(listForm.capacity) : null,
+    min_hours: Number(listForm.minHours) || 1,
+    days_available: listForm.daysAvailable,
+    travel_radius: Number(listForm.travelRadius) || 10,
+    verified: false,
+    listing_trust: 4.0,
+    rating: 0,
+    review_count: 0,
+    available: true,
+  };
+
+  const { error } = await supabase.from('listings').insert([base]);
+  if (error) { toast('❌ Error: ' + error.message); return; }
+  toast('🎉 Listing live!');
+  setView('browse');
+};
 
     return (
       <div style={{ padding: 24, maxWidth: 600, margin: "0 auto" }}>
