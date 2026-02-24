@@ -155,26 +155,18 @@ const BookingModal = ({ listing, onClose, onBooked, myAddress, setMyAddress }) =
         description: lt === "item" ? 'Pre-booking deposit' : `Booking — ${listing.title}`,
         theme: { color: '#F59E0B' },
         handler: function(response) {
-          setPreDepPaid(true);
-          setStep(5);
-          // Auto confirm booking after payment
-          setTimeout(() => {
-            const order = {
-              id: "ord" + Date.now(),
-              listing,
-              total,
-              fee,
-              dep,
-              mode: bookForm.mode,
-              status: "pending_handover",
-              depositStatus: "held",
-              ownerAddress: listing.full_address || listing.locality + ", " + (listing.city || "Bengaluru"),
-              ownerPhone: "+91 98765 43210",
-              ...bookForm
-            };
-            onBooked?.(order);
-            onClose?.();
-          }, 3000);
+          const order = {
+            id: "ord" + Date.now(),
+            listing, total, fee, dep,
+            mode: bookForm.mode,
+            status: "pending_handover",
+            depositStatus: "held",
+            ownerAddress: listing.full_address || listing.locality + ", " + (listing.city || "Bengaluru"),
+            ownerPhone: "+91 98765 43210",
+            ...bookForm
+          };
+          onBooked?.(order);
+          onClose?.();
         },
       };
       const rzp = new window.Razorpay(options);
@@ -916,14 +908,36 @@ export default function Leasio() {
 
   const toast = msg => { const id = Date.now(); setToasts(t => [...t, { id, msg }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4000); };
 
-  const handleBooked = (order) => {
+  const handleBooked = async (order) => {
+    // Save to Supabase
+    if (currentUser) {
+      try {
+        await supabase.from('bookings').insert([{
+          listing_id: order.listing.id,
+          renter_id: currentUser.id,
+          booking_type: order.listing.listingType,
+          status: 'pending_handover',
+          start_date: order.date || null,
+          slot: order.slot || null,
+          hours: order.hours || null,
+          qty: order.qty || 1,
+          delivery_mode: order.mode || 'self',
+          total_rent: order.total,
+          platform_fee: order.fee,
+          deposit_amount: order.dep,
+          renter_name: order.renterName,
+          renter_phone: order.renterPhone,
+          renter_address: order.renterAddress,
+        }]);
+      } catch(e) { console.error('Booking save failed:', e); }
+    }
     setOrders(o => [...o, order]);
     setListings(ls => ls.map(l => {
       if (l.id !== order.listing.id) return l;
       const newQty = Math.max(0, l.availableQty - (order.qty || 1));
       return { ...l, availableQty: newQty, available: newQty > 0 };
     }));
-    toast(`✅ Booking confirmed! ${order.mode === "app" ? "Delivery slot locked." : "Owner address unlocked."}`);
+    toast(`✅ Booking confirmed!`);
     setView("orders");
   };
 
