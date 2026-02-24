@@ -653,6 +653,7 @@ useEffect(() => {
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
   const [locality, setLocality] = useState("");
+  const [localityInput, setLocalityInput] = useState("");
   const [filterLT, setFilterLT] = useState("all");
   const [filterSale, setFilterSale] = useState(false); // true = show "For Sale" items only
   const [filterCat, setFilterCat] = useState("All");
@@ -865,7 +866,7 @@ useEffect(() => {
   key={locality}
   onChange={e => setLocality(e.target.value)}
 />
-          <button onClick={() => navigator.geolocation?.getCurrentPosition(p => { setLocality(`${p.coords.latitude.toFixed(2)}°N`); toast("📍 GPS detected!"); })} style={{ background: "none", border: "none", color: "#F59E0B", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans',sans-serif" }}>GPS</button>
+          <button onClick={() => navigator.geolocation?.getCurrentPosition(p => { const loc = `${p.coords.latitude.toFixed(2)}°N`; setLocality(loc); setLocalityInput(loc); toast("📍 GPS detected!"); })} style={{ background: "none", border: "none", color: "#F59E0B", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans',sans-serif" }}>GPS</button>
         </div>
       </div>
 
