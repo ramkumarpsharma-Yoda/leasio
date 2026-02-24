@@ -707,7 +707,16 @@ const OrdersView = ({ orders, setView }) => (
           {!isPurchase && order.deliverySlot && <div style={{ marginTop: 8, fontSize: 12, color: "#2563EB", fontWeight: 700 }}>🚚 Delivery: {order.deliverySlot}</div>}
           {!isPurchase && order.slot && <div style={{ marginTop: 4, fontSize: 12, color: "#6B7280" }}>⏰ Slot: {order.slot}</div>}
           {!isPurchase && order.hours && <div style={{ marginTop: 4, fontSize: 12, color: "#6B7280" }}>⏱ Duration: {order.hours} hours</div>}
-          {!isPurchase && order.ownerAddress && <div style={{ marginTop: 6, fontSize: 12, color: "#9CA3AF" }}>📍 Owner: {order.ownerAddress} · {order.ownerPhone}</div>}
+          {!isPurchase && (
+  <div style={{ marginTop: 10, background: "#0E1016", borderRadius: 10, padding: 12 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: "#10B981", marginBottom: 6 }}>📍 OWNER DETAILS</div>
+    <div style={{ fontSize: 13, color: "#F0EEE8", fontWeight: 700 }}>{order.listing?.owner || 'Owner'}</div>
+    <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>📱 {order.ownerPhone || order.listing?.ownerPhone || '+91 98765 43210'}</div>
+    <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>📍 {order.ownerAddress || order.listing?.full_address || order.listing?.locality}</div>
+    {order.slot && <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>⏰ Slot: {order.slot}</div>}
+    {order.hours && <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>⏱ Duration: {order.hours} hrs</div>}
+  </div>
+)}
           {isPurchase && <div style={{ marginTop: 8, fontSize: 12, color: "#10B981" }}>✅ Seller address unlocked · Confirm receipt in app to release payment</div>}
         </div>
       );

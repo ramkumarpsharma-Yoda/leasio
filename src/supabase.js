@@ -213,14 +213,43 @@ export async function fetchMyBookings(renterId) {
     .select(`
       *,
       listings:listing_id (
-        id, title, emoji, listing_type, locality, city, full_address, owner_id,
+        id, title, emoji, listing_type, locality, city, full_address,
+        owner_id, rent_price, buy_price, price_hour, deposit,
         profiles:owner_id (full_name, phone)
       )
     `)
     .eq('renter_id', renterId)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return data;
+
+  return data.map(b => ({
+    id: b.id,
+    listing: b.listings ? {
+      id: b.listings.id,
+      title: b.listings.title,
+      emoji: b.listings.emoji,
+      listingType: b.listings.listing_type,
+      locality: b.listings.locality,
+      city: b.listings.city,
+      full_address: b.listings.full_address,
+      owner: b.listings.profiles?.full_name || 'Owner',
+      ownerPhone: b.listings.profiles?.phone || '+91 98765 43210',
+    } : null,
+    total: b.total_rent,
+    fee: b.platform_fee,
+    dep: b.deposit_amount,
+    mode: b.delivery_mode,
+    slot: b.slot,
+    hours: b.hours,
+    date: b.start_date,
+    status: b.status,
+    renterName: b.renter_name,
+    renterPhone: b.renter_phone,
+    renterAddress: b.renter_address,
+    ownerAddress: b.listings?.full_address || b.listings?.locality + ', ' + (b.listings?.city || 'Bengaluru'),
+    ownerPhone: b.listings?.profiles?.phone || '+91 98765 43210',
+    type: b.booking_type === 'purchase' ? 'purchase' : 'rental',
+  }));
 }
 
 // Confirm handover (renter enters OTP)
