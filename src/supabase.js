@@ -211,14 +211,7 @@ export async function createBooking(booking, renterId) {
 export async function fetchMyBookings(renterId) {
   const { data, error } = await supabase
     .from('bookings')
-    .select(`
-      *,
-      listings:listing_id (
-        id, title, emoji, listing_type, locality, city, full_address,
-        owner_id, rent_price, buy_price, price_hour, deposit,
-        profiles:owner_id (full_name, phone)
-      )
-    `)
+    .select(`*, listings:listing_id (id, title, emoji, listing_type, locality, city, full_address, contact_phone, owner_id)`)
     .eq('renter_id', renterId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -233,8 +226,6 @@ export async function fetchMyBookings(renterId) {
       locality: b.listings.locality,
       city: b.listings.city,
       full_address: b.listings.full_address,
-      owner: b.listings.profiles?.full_name || 'Owner',
-      ownerPhone: row.contact_phone || row.profiles?.phone,
     } : null,
     total: b.total_rent,
     fee: b.platform_fee,
@@ -247,12 +238,11 @@ export async function fetchMyBookings(renterId) {
     renterName: b.renter_name,
     renterPhone: b.renter_phone,
     renterAddress: b.renter_address,
-    ownerAddress: b.listings?.full_address || b.listings?.locality + ', ' + (b.listings?.city || 'Bengaluru'),
-    ownerPhone: b.listings?.profiles?.phone || '+91 98765 43210',
-    type: b.booking_type === 'purchase' ? 'purchase' : 'rental',
+    ownerAddress: b.owner_address || b.listings?.full_address || b.listings?.locality,
+    ownerPhone: b.owner_phone || b.listings?.contact_phone || '+91 98765 43210',
+    type: 'rental',
   }));
 }
-
 // Confirm handover (renter enters OTP)
 export async function confirmHandover(bookingId, otp) {
   // First check OTP matches
