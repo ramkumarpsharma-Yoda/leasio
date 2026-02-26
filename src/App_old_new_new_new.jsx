@@ -788,233 +788,24 @@ const ListingCard = ({ item, onClick }) => {
   );
 };
 
-// ─── CLOUDINARY UPLOAD (shared) ───────────────────────────────────────────────
-const CLOUD_NAME    = import.meta.env.VITE_CLOUDINARY_CLOUD || "";
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_PRESET || "leasio_unsigned";
-async function uploadToCloudinary(file) {
-  if (!CLOUD_NAME) throw new Error("VITE_CLOUDINARY_CLOUD not set");
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("upload_preset", UPLOAD_PRESET);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method:"POST", body:fd });
-  if (!res.ok) throw new Error("Upload failed: " + res.statusText);
-  return (await res.json()).secure_url;
-}
-
-// ─── AADHAAR VERIFICATION MODAL ───────────────────────────────────────────────
-// Validates 12-digit format locally. Real UIDAI API verification requires
-// government-approved KUA integration — use this as the submission layer.
-const AadhaarModal = ({ user, onClose, onVerified }) => {
-  const [step,        setStep]      = useState(1); // 1=number, 2=upload, 3=done
-  const [number,      setNumber]    = useState("");
-  const [imgUrl,      setImgUrl]    = useState(null);
-  const [uploading,   setUploading] = useState(false);
-  const [submitting,  setSubmitting] = useState(false);
-  const [error,       setError]     = useState("");
-
-  const numValid = /^\d{12}$/.test(number);
-
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true); setError("");
-    try {
-      const url = await uploadToCloudinary(file);
-      setImgUrl(url);
-    } catch(e) { setError("Upload failed: " + e.message); }
-    setUploading(false);
-  };
-
-  const handleSubmit = async () => {
-    if (!numValid || !imgUrl) return;
-    setSubmitting(true); setError("");
-    try {
-      // Store in user_profiles table — status = pending_verification
-      const { error: e } = await supabase.from("user_profiles").upsert({
-        id: user.id,
-        aadhaar_number: number,          // store last 4 only in prod — full number here for demo
-        aadhaar_image_url: imgUrl,
-        verification_status: "pending",
-        submitted_at: new Date().toISOString(),
-      });
-      if (e) throw e;
-      setStep(3);
-      onVerified("pending");
-    } catch(e) { setError("Submission failed: " + e.message); }
-    setSubmitting(false);
-  };
-
-  const inpStyle = { background:"#111318", border:`1px solid ${error?"#EF4444":"#252830"}`, borderRadius:9, padding:"12px 14px", color:"#F0EEE8", fontSize:15, outline:"none", fontFamily:"'DM Sans',sans-serif", width:"100%", boxSizing:"border-box", letterSpacing:3 };
-
-  if (step === 3) return (
-    <Modal onClose={onClose} maxW={420}>
-      <div style={{ textAlign:"center", padding:"16px 0" }}>
-        <div style={{ fontSize:52, marginBottom:12 }}>🪪</div>
-        <div style={{ fontWeight:900, fontSize:20, marginBottom:8 }}>Aadhaar Submitted!</div>
-        <div style={{ color:"#9CA3AF", fontSize:13, lineHeight:1.7, marginBottom:20 }}>
-          Your Aadhaar details are under review.<br/>
-          Verification typically takes <strong style={{ color:"#F0EEE8" }}>24–48 hours</strong>.<br/>
-          Until then, you can post <strong style={{ color:"#F59E0B" }}>1 listing</strong> and make <strong style={{ color:"#F59E0B" }}>1 booking</strong>.
-        </div>
-        <div style={{ background:"#0E1016", borderRadius:12, padding:14, marginBottom:20, textAlign:"left" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#F59E0B", marginBottom:8 }}>WHAT HAPPENS NEXT</div>
-          <div style={{ fontSize:12, color:"#9CA3AF", lineHeight:1.8 }}>
-            ✓ Our team reviews your Aadhaar image<br/>
-            ✓ Number is matched against the image<br/>
-            ✓ You get a notification when verified<br/>
-            ✓ After verification: unlimited listings & bookings
-          </div>
-        </div>
-        <Btn variant="primary" style={{ width:"100%" }} onClick={onClose}>Start Exploring</Btn>
-      </div>
-    </Modal>
-  );
-
-  return (
-    <Modal onClose={null} maxW={460}>
-      {/* No close button — deliberately blocking on first signup */}
-      <div style={{ textAlign:"center", marginBottom:20 }}>
-        <div style={{ fontSize:40, marginBottom:8 }}>🪪</div>
-        <div style={{ fontWeight:900, fontSize:20, marginBottom:4 }}>Verify Your Identity</div>
-        <div style={{ color:"#9CA3AF", fontSize:13 }}>Required to list or book on Leasio. Keeps the community safe.</div>
-      </div>
-
-      <div style={{ display:"flex", gap:4, marginBottom:20 }}>
-        {[1,2].map(i => <div key={i} style={{ flex:1, height:3, borderRadius:2, background:step>=i?"#F59E0B":"#252830" }} />)}
-      </div>
-
-      {step === 1 && <>
-        <InfoBox color="#2563EB" icon="🔒" label="YOUR AADHAAR NUMBER IS SAFE"
-          sub="We store only the last 4 digits publicly. The full number is encrypted and used only for one-time verification." />
-        <div style={{ marginBottom:16 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase", marginBottom:8 }}>12-Digit Aadhaar Number</div>
-          <input
-            type="text" inputMode="numeric" maxLength={12}
-            value={number} placeholder="XXXX XXXX XXXX"
-            style={inpStyle}
-            onChange={e => { const v = e.target.value.replace(/\D/g,"").slice(0,12); setNumber(v); setError(""); }}
-          />
-          {number.length > 0 && number.length < 12 && (
-            <div style={{ color:"#EF4444", fontSize:11, marginTop:5 }}>⚠ {12 - number.length} more digits needed</div>
-          )}
-          {numValid && <div style={{ color:"#10B981", fontSize:11, marginTop:5 }}>✓ Valid format</div>}
-        </div>
-        {error && <div style={{ color:"#EF4444", fontSize:12, marginBottom:10 }}>{error}</div>}
-        <Btn variant="primary" style={{ width:"100%", opacity:numValid?1:0.5 }}
-          disabled={!numValid} onClick={() => setStep(2)}>Next — Upload Aadhaar Photo →</Btn>
-        <div style={{ textAlign:"center", marginTop:12 }}>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:"#374151", fontSize:11, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-            Skip for now — I'll verify within 3 days
-          </button>
-        </div>
-      </>}
-
-      {step === 2 && <>
-        <InfoBox color="#7C3AED" icon="📸" label="UPLOAD AADHAAR PHOTO"
-          sub="Photo of front side showing your name, number, and photo. File stays private — never shared publicly." />
-
-        {!imgUrl ? (
-          <label style={{ display:"block", cursor: uploading?"wait":"pointer" }}>
-            <div style={{ border:"2px dashed #252830", borderRadius:12, padding:"28px 16px", textAlign:"center", background:"#0E1016" }}
-              onMouseEnter={e=>e.currentTarget.style.borderColor="#F59E0B60"}
-              onMouseLeave={e=>e.currentTarget.style.borderColor="#252830"}>
-              {uploading ? (
-                <div style={{ color:"#F59E0B", fontWeight:700 }}>⏳ Uploading...</div>
-              ) : (
-                <>
-                  <div style={{ fontSize:36, marginBottom:8 }}>📄</div>
-                  <div style={{ fontSize:13, color:"#9CA3AF" }}>Click to upload Aadhaar photo</div>
-                  <div style={{ fontSize:11, color:"#374151", marginTop:4 }}>JPG or PNG — front side only</div>
-                </>
-              )}
-            </div>
-            <input type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile} />
-          </label>
-        ) : (
-          <div style={{ position:"relative", borderRadius:12, overflow:"hidden", marginBottom:4 }}>
-            <img src={imgUrl} alt="Aadhaar" style={{ width:"100%", maxHeight:200, objectFit:"cover", borderRadius:12 }} />
-            <div style={{ position:"absolute", top:8, right:8 }}>
-              <button onClick={() => setImgUrl(null)} style={{ background:"#EF4444", border:"none", borderRadius:6, color:"#fff", padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"'DM Sans',sans-serif" }}>Retake</button>
-            </div>
-            <div style={{ position:"absolute", bottom:8, left:8, background:"rgba(16,185,129,.9)", borderRadius:6, padding:"3px 10px", fontSize:11, fontWeight:700, color:"#fff" }}>✓ Uploaded</div>
-          </div>
-        )}
-
-        {error && <div style={{ color:"#EF4444", fontSize:12, marginTop:8, marginBottom:8 }}>{error}</div>}
-
-        <div style={{ display:"flex", gap:8, marginTop:16 }}>
-          <Btn variant="ghost" onClick={() => setStep(1)}>← Back</Btn>
-          <Btn variant="primary" style={{ flex:1, opacity:imgUrl?1:0.5 }}
-            disabled={!imgUrl || submitting} onClick={handleSubmit}>
-            {submitting ? "Submitting..." : "Submit for Verification ✓"}
-          </Btn>
-        </div>
-        <div style={{ textAlign:"center", marginTop:12 }}>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:"#374151", fontSize:11, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-            Skip for now — I'll verify within 3 days
-          </button>
-        </div>
-      </>}
-    </Modal>
-  );
-};
-
-// ─── VERIFICATION BANNER ──────────────────────────────────────────────────────
-const VerificationBanner = ({ profile, onVerifyNow, daysLeft }) => {
-  if (!profile || profile.verification_status === "verified") return null;
-  const isPending = profile.verification_status === "pending";
-  const isExpired = daysLeft !== null && daysLeft <= 0;
-
-  if (isPending) return (
-    <div style={{ background:"#1C1F27", borderLeft:"4px solid #F59E0B", padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-      <span style={{ fontSize:18 }}>⏳</span>
-      <div style={{ flex:1 }}>
-        <span style={{ fontWeight:700, fontSize:13 }}>Aadhaar verification pending</span>
-        <span style={{ color:"#9CA3AF", fontSize:12, marginLeft:8 }}>Our team is reviewing your documents · 24–48 hours</span>
-      </div>
-      <Tag c="#F59E0B">Unverified</Tag>
-    </div>
-  );
-
-  return (
-    <div style={{ background: isExpired?"#2D0A0A":"#1A130A", borderLeft:`4px solid ${isExpired?"#EF4444":"#F59E0B"}`, padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-      <span style={{ fontSize:18 }}>{isExpired?"🚫":"⚠️"}</span>
-      <div style={{ flex:1 }}>
-        {isExpired ? (
-          <><span style={{ fontWeight:700, fontSize:13, color:"#EF4444" }}>Account restricted — </span><span style={{ color:"#9CA3AF", fontSize:12 }}>Aadhaar verification required to continue listing or booking.</span></>
-        ) : (
-          <><span style={{ fontWeight:700, fontSize:13 }}>Unverified account — </span><span style={{ color:"#9CA3AF", fontSize:12 }}>1 listing · 1 booking allowed. Verify before day {daysLeft > 0 ? 3 - daysLeft + 1 : 3} to unlock full access.</span></>
-        )}
-      </div>
-      <Btn variant={isExpired?"danger":"primary"} style={{ fontSize:12, padding:"6px 14px" }} onClick={onVerifyNow}>
-        🪪 Verify Now
-      </Btn>
-    </div>
-  );
-};
-
 // ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }) => {
-  const [mode, setMode]       = useState('login');
-  const [email, setEmail]     = useState('');
+  const [mode, setMode]     = useState('login');
+  const [email, setEmail]   = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [error, setError]   = useState('');
 
   const handle = async () => {
-    if (loading || !email || !password) return;
     setLoading(true); setError('');
     try {
-      const fn = mode === 'login' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
-      const { data, error: e } = await fn.call(supabase.auth, { email, password });
+      const fn = mode==='login' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
+      const { data, error:e } = await fn.call(supabase.auth, { email, password });
       if (e) throw e;
-      onLogin(data.user, mode === 'signup');
-    } catch(e) { setError(mode === 'login' ? 'Invalid email or password' : 'Signup failed: ' + e.message); }
+      onLogin(data.user);
+    } catch(e) { setError(mode==='login'?'Invalid email or password':'Signup failed: '+e.message); }
     setLoading(false);
   };
-
-  // Enter key works from any field
-  const onKey = e => { if (e.key === 'Enter') handle(); };
 
   const inp = { background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif", width:"100%", boxSizing:"border-box" };
 
@@ -1024,25 +815,20 @@ const LoginScreen = ({ onLogin }) => {
         <div style={{ fontSize:32, fontWeight:900, color:"#F59E0B", marginBottom:4 }}>🏪 Leasio</div>
         <div style={{ color:"#6B7280", marginBottom:20, fontSize:13 }}>{mode==='login'?'Sign in to continue':'Create your account'}</div>
         <div style={{ display:"flex", gap:8, marginBottom:20 }}>
-          {['login','signup'].map(m => <button key={m} onClick={()=>{ setMode(m); setError(''); }} style={{ flex:1, background:mode===m?"#F59E0B":"#111318", color:mode===m?"#0C0E14":"#9CA3AF", border:"1px solid #252830", borderRadius:8, padding:"8px", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>{m==='login'?'Sign In':'Sign Up'}</button>)}
+          {['login','signup'].map(m => <button key={m} onClick={()=>setMode(m)} style={{ flex:1, background:mode===m?"#F59E0B":"#111318", color:mode===m?"#0C0E14":"#9CA3AF", border:"1px solid #252830", borderRadius:8, padding:"8px", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>{m==='login'?'Sign In':'Sign Up'}</button>)}
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
             <span style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase" }}>Email</span>
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={onKey} placeholder="you@example.com" style={inp} autoFocus />
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" style={inp} />
           </label>
           <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
             <span style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase" }}>Password</span>
-            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={onKey} placeholder="••••••••" style={inp} />
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" style={inp} onKeyDown={e=>e.key==='Enter'&&handle()} />
           </label>
-          {mode==='signup'&&(
-            <div style={{ background:"#0E1016", borderRadius:9, padding:10, fontSize:11, color:"#6B7280", lineHeight:1.6 }}>
-              🪪 After signing up, you'll be asked to verify your Aadhaar. Unverified accounts can post 1 listing and make 1 booking for the first 3 days.
-            </div>
-          )}
           {error&&<div style={{ color:"#EF4444", fontSize:12 }}>{error}</div>}
           <button onClick={handle} disabled={loading||!email||!password}
-            style={{ background:"#F59E0B", color:"#0C0E14", border:"none", borderRadius:9, padding:"11px 18px", cursor: loading||!email||!password?"not-allowed":"pointer", fontWeight:700, fontSize:14, fontFamily:"'DM Sans',sans-serif", marginTop:4, opacity:loading||!email||!password?0.7:1 }}>
+            style={{ background:"#F59E0B", color:"#0C0E14", border:"none", borderRadius:9, padding:"11px 18px", cursor:"pointer", fontWeight:700, fontSize:14, fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
             {loading?'Please wait...':mode==='login'?'Sign In →':'Create Account →'}
           </button>
         </div>
@@ -1324,23 +1110,21 @@ const BrowseView = ({ filtered, allCats, search, setSearch, locality, setLocalit
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function Leasio() {
-  const [listings,      setListings]      = useState([]);
-  const [view,          setView]          = useState("browse");
-  const [selected,      setSelected]      = useState(null);
-  const [search,        setSearch]        = useState("");
-  const [locality,      setLocality]      = useState("");
-  const [filterLT,      setFilterLT]      = useState("all");
-  const [filterSale,    setFilterSale]    = useState(false);
-  const [filterCat,     setFilterCat]     = useState("All");
-  const [toasts,        setToasts]        = useState([]);
-  const [bookingModal,  setBookingModal]  = useState(null);
-  const [buyModal,      setBuyModal]      = useState(null);
-  const [orders,        setOrders]        = useState([]);
-  const [currentUser,   setCurrentUser]   = useState(null);
-  const [manageOrder,   setManageOrder]   = useState(null);
-  const [rateOrder,     setRateOrder]     = useState(null);
-  const [userProfile,   setUserProfile]   = useState(null);
-  const [showAadhaar,   setShowAadhaar]   = useState(false);
+  const [listings,    setListings]    = useState([]);
+  const [view,        setView]        = useState("browse");
+  const [selected,    setSelected]    = useState(null);
+  const [search,      setSearch]      = useState("");
+  const [locality,    setLocality]    = useState("");
+  const [filterLT,    setFilterLT]    = useState("all");
+  const [filterSale,  setFilterSale]  = useState(false);
+  const [filterCat,   setFilterCat]   = useState("All");
+  const [toasts,      setToasts]      = useState([]);
+  const [bookingModal, setBookingModal] = useState(null);
+  const [buyModal,    setBuyModal]    = useState(null);
+  const [orders,      setOrders]      = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [manageOrder, setManageOrder] = useState(null);
+  const [rateOrder,   setRateOrder]   = useState(null);
 
   useEffect(() => {
     fetchListings().then(data => setListings(data.length?data:SEED)).catch(()=>setListings(SEED));
@@ -1355,17 +1139,6 @@ export default function Leasio() {
   useEffect(() => {
     if (!currentUser) return;
     fetchMyBookings(currentUser.id).then(setOrders).catch(console.error);
-    // Load or create user_profile
-    supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
-      .then(({data}) => {
-        if (data) {
-          setUserProfile(data);
-        } else {
-          // First login — create unverified profile
-          const profile = { id: currentUser.id, verification_status: "unverified", created_at: new Date().toISOString() };
-          supabase.from("user_profiles").insert([profile]).then(() => setUserProfile(profile));
-        }
-      });
   }, [currentUser]);
 
   useEffect(() => {
@@ -1376,52 +1149,7 @@ export default function Leasio() {
 
   const toast = msg => { const id=Date.now(); setToasts(t=>[...t,{id,msg}]); setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000); };
 
-  // ── Verification helpers ────────────────────────────────────────────────────
-  const isVerified   = userProfile?.verification_status === "verified";
-  const isPending    = userProfile?.verification_status === "pending";
-  const isUnverified = !isVerified && !isPending;
-
-  // How many days since account creation
-  const accountAgeDays = userProfile?.created_at
-    ? Math.floor((Date.now() - new Date(userProfile.created_at)) / 86400000)
-    : 0;
-  const gracePeriodDays = 3;
-  const daysLeft     = Math.max(0, gracePeriodDays - accountAgeDays);
-  const graceExpired = accountAgeDays >= gracePeriodDays;
-
-  // Unverified limits: 1 listing, 1 booking (only within grace period)
-  const myListingsCount = listings.filter(l => l.owner_id === currentUser?.id).length;
-  const myBookingsCount = orders.length;
-
-  const canList = () => {
-    if (isVerified || isPending) return true; // pending users keep trial access
-    if (graceExpired) return false;            // after 3 days, blocked
-    return myListingsCount < 1;                // within grace: max 1
-  };
-
-  const canBook = () => {
-    if (isVerified || isPending) return true;
-    if (graceExpired) return false;
-    return myBookingsCount < 1;
-  };
-
-  // Called after listing attempt when blocked
-  const guardList = () => {
-    if (canList()) return true;
-    setShowAadhaar(true);
-    toast("🪪 Please verify your Aadhaar to post more listings.");
-    return false;
-  };
-
-  const guardBook = () => {
-    if (canBook()) return true;
-    setShowAadhaar(true);
-    toast("🪪 Please verify your Aadhaar to make more bookings.");
-    return false;
-  };
-
   const handleBooked = async (order) => {
-    if (!guardBook()) return; // Aadhaar limit check
     if (currentUser && order.listing.id && typeof order.listing.id==="string") {
       try {
         const {error:e} = await supabase.from('bookings').insert([{
@@ -1494,10 +1222,7 @@ export default function Leasio() {
     toast("⭐ Thanks! Your rating has been submitted and trust scores updated.");
   };
 
-  if (!currentUser) return <LoginScreen onLogin={(user, isNewSignup) => {
-    setCurrentUser(user);
-    if (isNewSignup) setTimeout(() => setShowAadhaar(true), 600); // slight delay so main UI renders first
-  }} />;
+  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
 
   const filtered = listings.filter(l => {
     const ms = !search||l.title.toLowerCase().includes(search.toLowerCase())||(l.description||"").toLowerCase().includes(search.toLowerCase());
@@ -1525,21 +1250,11 @@ export default function Leasio() {
         <div style={{ fontSize:19, fontWeight:900, color:"#F59E0B", letterSpacing:-1, cursor:"pointer", whiteSpace:"nowrap" }} onClick={() => { setView("browse"); setSelected(null); }}>🏪 Leasio</div>
         <div style={{ flex:1 }} />
         {[{id:"browse",l:"Browse"},{id:"list",l:"+ List"},{id:"orders",l:"Orders"}].map(t=>(
-          <button key={t.id} style={S.nav(view===t.id&&!selected)} onClick={() => {
-            if (t.id === "list" && !guardList()) return;
-            setView(t.id); setSelected(null);
-          }}>{t.l}</button>
+          <button key={t.id} style={S.nav(view===t.id&&!selected)} onClick={() => { setView(t.id); setSelected(null); }}>{t.l}</button>
         ))}
         <button style={{ background:"none", border:"none", color:"#6B7280", fontSize:12, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}
           onClick={() => { supabase.auth.signOut(); setCurrentUser(null); }}>Sign Out</button>
       </div>
-
-      {/* Verification banner — sits below topbar */}
-      <VerificationBanner
-        profile={userProfile}
-        daysLeft={daysLeft}
-        onVerifyNow={() => setShowAadhaar(true)}
-      />
 
       {view==="browse"&&!selected&&(
         <div style={{ background:"linear-gradient(155deg,#130A00 0%,#080A14 50%,#0C0E14 100%)", borderBottom:"1px solid #1E2130", padding:"36px 24px 28px", textAlign:"center" }}>
@@ -1571,14 +1286,6 @@ export default function Leasio() {
       }} />}
       {manageOrder&&<CancelEditModal order={manageOrder} onClose={()=>setManageOrder(null)} onCancelled={handleCancelled} onRescheduled={handleRescheduled} />}
       {rateOrder&&<RatingModal order={rateOrder} onClose={()=>setRateOrder(null)} onSubmitted={handleRatingSubmitted} />}
-      {showAadhaar&&currentUser&&<AadhaarModal
-        user={currentUser}
-        onClose={() => setShowAadhaar(false)}
-        onVerified={(status) => {
-          setUserProfile(p => ({...p, verification_status: status}));
-          setShowAadhaar(false);
-        }}
-      />}
 
       <style>{`
         @keyframes slideIn { from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)} }
