@@ -792,19 +792,12 @@ const ListingCard = ({ item, onClick }) => {
 const CLOUD_NAME    = import.meta.env.VITE_CLOUDINARY_CLOUD || "";
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_PRESET || "leasio_unsigned";
 async function uploadToCloudinary(file) {
-  if (!CLOUD_NAME) {
-    throw new Error("Cloudinary not configured — add VITE_CLOUDINARY_CLOUD to your .env file");
-  }
+  if (!CLOUD_NAME) throw new Error("VITE_CLOUDINARY_CLOUD not set");
   const fd = new FormData();
   fd.append("file", file);
   fd.append("upload_preset", UPLOAD_PRESET);
   const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method:"POST", body:fd });
-  if (!res.ok) {
-    // Parse Cloudinary's actual error message instead of just "Bad Request"
-    let detail = res.statusText;
-    try { const j = await res.json(); detail = j?.error?.message || detail; } catch(_) {}
-    throw new Error(detail);
-  }
+  if (!res.ok) throw new Error("Upload failed: " + res.statusText);
   return (await res.json()).secure_url;
 }
 
@@ -824,18 +817,11 @@ const AadhaarModal = ({ user, onClose, onVerified }) => {
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!CLOUD_NAME) {
-      setError("Cloudinary not set up yet. Add VITE_CLOUDINARY_CLOUD and VITE_CLOUDINARY_PRESET to your .env, then redeploy.");
-      return;
-    }
     setUploading(true); setError("");
     try {
       const url = await uploadToCloudinary(file);
       setImgUrl(url);
-    } catch(e) {
-      // Common causes: preset not set to Unsigned, wrong cloud name, or preset doesn't exist
-      setError(`Upload failed: ${e.message}. Check that your Cloudinary upload preset "${UPLOAD_PRESET}" exists and is set to Unsigned mode.`);
-    }
+    } catch(e) { setError("Upload failed: " + e.message); }
     setUploading(false);
   };
 
@@ -1370,28 +1356,29 @@ export default function Leasio() {
     if (!currentUser) return;
     fetchMyBookings(currentUser.id).then(setOrders).catch(console.error);
 
-    // Load profile, then fetch real account creation date via RPC (server-side auth.users query)
-    supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
-      .then(async ({ data }) => {
-        // Get the real account creation date from auth.users (server-side, can't be faked)
-        const { data: rpcData } = await supabase.rpc("get_my_created_at");
-        const realCreatedAt = rpcData || new Date().toISOString();
+    // getUser() makes a live API call and returns the real auth.users row
+    // (the session JWT's created_at is the token issue time, not account creation)
+    supabase.auth.getUser().then(({ data: { user: freshUser } }) => {
+      const realCreatedAt = freshUser?.created_at || new Date().toISOString();
 
-        if (data) {
-          if (!data.real_created_at) {
-            // Backfill for existing users
-            await supabase.from("user_profiles").update({ real_created_at: realCreatedAt }).eq("id", currentUser.id);
-            setUserProfile({ ...data, real_created_at: realCreatedAt });
+      supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
+        .then(({ data }) => {
+          if (data) {
+            // Backfill real_created_at for older rows that don't have it yet
+            if (!data.real_created_at) {
+              supabase.from("user_profiles")
+                .update({ real_created_at: realCreatedAt })
+                .eq("id", currentUser.id);
+              setUserProfile({ ...data, real_created_at: realCreatedAt });
+            } else {
+              setUserProfile(data);
+            }
           } else {
-            setUserProfile(data);
+            const profile = { id: currentUser.id, verification_status: "unverified", real_created_at: realCreatedAt };
+            supabase.from("user_profiles").insert([profile]).then(() => setUserProfile(profile));
           }
-        } else {
-          // New user — create profile with real creation date
-          const profile = { id: currentUser.id, verification_status: "unverified", real_created_at: realCreatedAt };
-          await supabase.from("user_profiles").insert([profile]);
-          setUserProfile(profile);
-        }
-      });
+        });
+    });
   }, [currentUser]);
 
   useEffect(() => {
