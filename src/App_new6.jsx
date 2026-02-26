@@ -1385,9 +1385,9 @@ export default function Leasio() {
   const isPending    = userProfile?.verification_status === "pending";
   const isUnverified = !isVerified && !isPending;
 
-  // How many days since the auth account was actually created
-  const accountAgeDays = currentUser?.created_at
-    ? Math.floor((Date.now() - new Date(currentUser.created_at)) / 86400000)
+  // How many days since account creation
+  const accountAgeDays = userProfile?.created_at
+    ? Math.floor((Date.now() - new Date(userProfile.created_at)) / 86400000)
     : 0;
   const gracePeriodDays = 3;
   const daysLeft     = Math.max(0, gracePeriodDays - accountAgeDays);
