@@ -1,14 +1,141 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>leasio</title>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- ── Primary Meta ─────────────────────────────────────────────── -->
+    <title>Leasio — India's Rental Marketplace</title>
+    <meta name="description" content="Rent items, book venues, hire services — with escrow and deposit safety." />
+    <meta name="theme-color" content="#F59E0B" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- ── Apple PWA ─────────────────────────────────────────────────── -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Leasio" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- ── Splash screens (iOS) — optional but polished ─────────────── -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+    <!-- ── Favicon ───────────────────────────────────────────────────── -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+
+    <!-- ── PWA Manifest ──────────────────────────────────────────────── -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- ── Fonts ─────────────────────────────────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <style>
+      /* Prevent flash of white on load */
+      html, body { background: #0C0E14; margin: 0; padding: 0; }
+
+      /* iOS safe area padding */
+      #root { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+
+      /* PWA install prompt custom styles */
+      #pwa-install-banner {
+        display: none;
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1C1F27;
+        border: 1px solid #F59E0B40;
+        border-radius: 14px;
+        padding: 14px 20px;
+        z-index: 9999;
+        font-family: 'DM Sans', sans-serif;
+        color: #F0EEE8;
+        font-size: 13px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        max-width: 340px;
+        width: calc(100vw - 32px);
+        align-items: center;
+        gap: 12px;
+      }
+      #pwa-install-banner.show { display: flex; }
+      #pwa-install-btn {
+        background: #F59E0B; color: #0C0E14; border: none;
+        border-radius: 8px; padding: 7px 14px; font-weight: 700;
+        font-size: 12px; cursor: pointer; white-space: nowrap;
+        font-family: 'DM Sans', sans-serif;
+      }
+      #pwa-dismiss-btn {
+        background: none; border: none; color: #6B7280;
+        font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+
+    <!-- PWA Install Banner -->
+    <div id="pwa-install-banner">
+      <span style="font-size:22px">🏪</span>
+      <div style="flex:1">
+        <div style="font-weight:700;margin-bottom:2px">Add Leasio to Home Screen</div>
+        <div style="color:#9CA3AF;font-size:11px">Works offline · No App Store needed</div>
+      </div>
+      <button id="pwa-install-btn">Install</button>
+      <button id="pwa-dismiss-btn">✕</button>
+    </div>
+
+    <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      // ── Service Worker Registration ──────────────────────────────────
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW registered:', reg.scope))
+            .catch(err => console.warn('SW failed:', err));
+        });
+      }
+
+      // ── PWA Install Prompt ───────────────────────────────────────────
+      let deferredPrompt = null;
+      const banner  = document.getElementById('pwa-install-banner');
+      const installBtn = document.getElementById('pwa-install-btn');
+      const dismissBtn = document.getElementById('pwa-dismiss-btn');
+
+      // Only show if not already installed and not dismissed recently
+      const lastDismissed = localStorage.getItem('pwa-dismissed');
+      const daysSince = lastDismissed ? (Date.now() - Number(lastDismissed)) / 86400000 : 999;
+
+      window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        deferredPrompt = e;
+        // Show banner after 30 seconds on first visit, or after 7 days if dismissed
+        if (daysSince > 7) {
+          setTimeout(() => banner.classList.add('show'), 30000);
+        }
+      });
+
+      installBtn?.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        banner.classList.remove('show');
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('PWA install outcome:', outcome);
+        deferredPrompt = null;
+      });
+
+      dismissBtn?.addEventListener('click', () => {
+        banner.classList.remove('show');
+        localStorage.setItem('pwa-dismissed', Date.now());
+      });
+
+      // Hide banner if already installed
+      window.addEventListener('appinstalled', () => {
+        banner.classList.remove('show');
+        deferredPrompt = null;
+      });
+    </script>
   </body>
 </html>
