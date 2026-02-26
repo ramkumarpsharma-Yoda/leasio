@@ -1370,19 +1370,23 @@ export default function Leasio() {
     if (!currentUser) return;
     fetchMyBookings(currentUser.id).then(setOrders).catch(console.error);
 
+    // Load profile, then fetch real account creation date via RPC (server-side auth.users query)
     supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
       .then(async ({ data }) => {
-        // Always get the authoritative date from auth.users server-side —
-        // never trust the stored value since it may have been backfilled incorrectly
-        const { data: realCreatedAt } = await supabase.rpc("get_my_created_at");
+        // Get the real account creation date from auth.users (server-side, can't be faked)
+        const { data: rpcData } = await supabase.rpc("get_my_created_at");
+        const realCreatedAt = rpcData || new Date().toISOString();
 
         if (data) {
-          // Always overwrite real_created_at with the server truth
-          await supabase.from("user_profiles")
-            .update({ real_created_at: realCreatedAt })
-            .eq("id", currentUser.id);
-          setUserProfile({ ...data, real_created_at: realCreatedAt });
+          if (!data.real_created_at) {
+            // Backfill for existing users
+            await supabase.from("user_profiles").update({ real_created_at: realCreatedAt }).eq("id", currentUser.id);
+            setUserProfile({ ...data, real_created_at: realCreatedAt });
+          } else {
+            setUserProfile(data);
+          }
         } else {
+          // New user — create profile with real creation date
           const profile = { id: currentUser.id, verification_status: "unverified", real_created_at: realCreatedAt };
           await supabase.from("user_profiles").insert([profile]);
           setUserProfile(profile);
