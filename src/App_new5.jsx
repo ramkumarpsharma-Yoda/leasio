@@ -1361,12 +1361,8 @@ export default function Leasio() {
         if (data) {
           setUserProfile(data);
         } else {
-          // First login — create profile using the auth account's real creation date
-          const profile = {
-            id: currentUser.id,
-            verification_status: "unverified",
-            created_at: currentUser.created_at || new Date().toISOString(), // use real signup date
-          };
+          // First login — create unverified profile
+          const profile = { id: currentUser.id, verification_status: "unverified", created_at: new Date().toISOString() };
           supabase.from("user_profiles").insert([profile]).then(() => setUserProfile(profile));
         }
       });
