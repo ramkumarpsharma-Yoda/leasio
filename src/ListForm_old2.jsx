@@ -129,7 +129,7 @@ const ListForm = ({ setListings, setView, toast }) => {
     rentPrice:"", priceHour:"", priceHalfDay:"", priceFullDay:"",
     deposit:"", buyPrice:"", minDays:1, minHours:1,
     totalQty:1, daysAvailable:[], travelRadius:10, capacity:"",
-    city:"", fullAddress:"", phone:"", ownerName:""
+    city:"", fullAddress:"", phone:""
   });
   const [photos, setPhotos] = useState([]);
   const [errors, setErrors] = useState({});
@@ -138,17 +138,6 @@ const ListForm = ({ setListings, setView, toast }) => {
   const lt = listForm.listingType;
   const emojis = ["📦","🪑","🔧","📷","🔊","⛺","💒","⚽","🎉","🏟","🧘","📸","🚗","💡","🎸","🏍","🔑","💼","🎭","🌿"];
 
-  // Pre-fill owner name from user_profiles if available
-  React.useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase.from("user_profiles").select("full_name").eq("id", user.id).single()
-        .then(({ data }) => {
-          if (data?.full_name) setListForm(f => ({ ...f, ownerName: data.full_name }));
-        });
-    });
-  }, []);
-
   const toggleDay = d => setListForm(f => ({
     ...f, daysAvailable: f.daysAvailable.includes(d) ? f.daysAvailable.filter(x=>x!==d) : [...f.daysAvailable, d]
   }));
@@ -156,7 +145,6 @@ const ListForm = ({ setListings, setView, toast }) => {
   const validate = () => {
     const e = {};
     if (!listForm.title.trim()) e.title = "Required";
-    if (!listForm.ownerName.trim()) e.ownerName = "Required";
     if (!listForm.locality.trim()) e.locality = "Required";
     if (!listForm.city.trim()) e.city = "Required";
     if (!listForm.phone.trim()) e.phone = "Required";
@@ -178,7 +166,6 @@ const ListForm = ({ setListings, setView, toast }) => {
       const { data:{ user } } = await supabase.auth.getUser();
       const base = {
         owner_id: user.id,
-        owner_name: listForm.ownerName.trim(),
         listing_type: listForm.listingType,
         subtype: listForm.subtype,
         category: listForm.category,
@@ -214,12 +201,6 @@ const ListForm = ({ setListings, setView, toast }) => {
 
       const { error } = await supabase.from('listings').insert([base]);
       if (error) { toast('❌ Error: ' + error.message); setSubmitting(false); return; }
-
-      // Save name to profile so it pre-fills next time
-      await supabase.from("user_profiles")
-        .update({ full_name: listForm.ownerName.trim() })
-        .eq("id", user.id);
-
       toast('🎉 Listing is live!');
       setView('browse');
     } catch(e) {
@@ -272,14 +253,6 @@ const ListForm = ({ setListings, setView, toast }) => {
           <input style={inpStyle("title")}
             placeholder={lt==="item"?"e.g. Canon DSLR Camera":lt==="venue"?"e.g. Shree Marriage Hall":"e.g. Football Coaching"}
             value={listForm.title} onChange={e => { setListForm(f=>({...f,title:e.target.value})); setErrors(er=>({...er,title:null})); }} />
-        </div>
-
-        {/* Owner name */}
-        <div>
-          {lbl("Your Name *", "ownerName")}
-          <input style={inpStyle("ownerName")} placeholder="Name shown to renters e.g. Ramesh Sharma"
-            value={listForm.ownerName}
-            onChange={e => { setListForm(f=>({...f,ownerName:e.target.value})); setErrors(er=>({...er,ownerName:null})); }} />
         </div>
 
         {/* Category */}

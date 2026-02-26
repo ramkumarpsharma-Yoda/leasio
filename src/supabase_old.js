@@ -211,7 +211,7 @@ export async function createBooking(booking, renterId) {
 export async function fetchMyBookings(renterId) {
   const { data, error } = await supabase
     .from('bookings')
-    .select(`*, listings:listing_id (id, title, emoji, listing_type, locality, city, full_address, contact_phone, owner_id, owner_name, photo_url)`)
+    .select(`*, listings:listing_id (id, title, emoji, listing_type, locality, city, full_address, contact_phone, owner_id)`)
     .eq('renter_id', renterId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -226,8 +226,6 @@ export async function fetchMyBookings(renterId) {
       locality: b.listings.locality,
       city: b.listings.city,
       full_address: b.listings.full_address,
-      owner: b.listings.owner_name || 'Owner',
-      photoUrl: b.listings.photo_url || null,
     } : null,
     total: b.total_rent,
     fee: b.platform_fee,
@@ -356,7 +354,7 @@ function mapListing(row) {
     locality:       row.locality,
     city:           row.city,
     // full_address intentionally NOT mapped here — only revealed post-deposit
-    owner:          row.owner_name || row.profiles?.full_name || 'Unknown',
+    owner:          row.profiles?.full_name || 'Unknown',
     ownerPhone:     row.contact_phone || row.profiles?.phone || '+91 9876543210', // <--- ADD THIS LINE
     ownerId:        row.owner_id,
     ownerType:      row.profiles?.owner_type || 'individual',
@@ -380,9 +378,7 @@ function mapListing(row) {
     listingTrust:   row.listing_trust,
     rating:         row.rating,
     reviews:        row.review_count,
-    photoUrl:       row.photo_url    || null,
-    photos:         row.photos       || [],
-    bookedSlots:    {},
+    bookedSlots:    {},   // fetched separately via fetchBookedSlots()
     bookedDates:    [],
   };
 }
