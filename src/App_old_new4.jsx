@@ -983,7 +983,7 @@ const VerificationBanner = ({ profile, onVerifyNow, daysLeft }) => {
         {isExpired ? (
           <><span style={{ fontWeight:700, fontSize:13, color:"#EF4444" }}>Account restricted — </span><span style={{ color:"#9CA3AF", fontSize:12 }}>Aadhaar verification required to continue listing or booking.</span></>
         ) : (
-          <><span style={{ fontWeight:700, fontSize:13 }}>Unverified account — </span><span style={{ color:"#9CA3AF", fontSize:12 }}>1 listing · 1 booking allowed. {daysLeft > 0 ? `${daysLeft} day${daysLeft > 1 ? "s" : ""} left to verify.` : "Verify now to unlock full access."}</span></>
+          <><span style={{ fontWeight:700, fontSize:13 }}>Unverified account — </span><span style={{ color:"#9CA3AF", fontSize:12 }}>1 listing · 1 booking allowed. Verify before day {daysLeft > 0 ? 3 - daysLeft + 1 : 3} to unlock full access.</span></>
         )}
       </div>
       <Btn variant={isExpired?"danger":"primary"} style={{ fontSize:12, padding:"6px 14px" }} onClick={onVerifyNow}>
