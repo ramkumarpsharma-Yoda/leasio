@@ -1355,30 +1355,21 @@ export default function Leasio() {
   useEffect(() => {
     if (!currentUser) return;
     fetchMyBookings(currentUser.id).then(setOrders).catch(console.error);
-
-    // getUser() makes a live API call and returns the real auth.users row
-    // (the session JWT's created_at is the token issue time, not account creation)
-    supabase.auth.getUser().then(({ data: { user: freshUser } }) => {
-      const realCreatedAt = freshUser?.created_at || new Date().toISOString();
-
-      supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
-        .then(({ data }) => {
-          if (data) {
-            // Backfill real_created_at for older rows that don't have it yet
-            if (!data.real_created_at) {
-              supabase.from("user_profiles")
-                .update({ real_created_at: realCreatedAt })
-                .eq("id", currentUser.id);
-              setUserProfile({ ...data, real_created_at: realCreatedAt });
-            } else {
-              setUserProfile(data);
-            }
-          } else {
-            const profile = { id: currentUser.id, verification_status: "unverified", real_created_at: realCreatedAt };
-            supabase.from("user_profiles").insert([profile]).then(() => setUserProfile(profile));
-          }
-        });
-    });
+    // Load or create user_profile
+    supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
+      .then(({data}) => {
+        if (data) {
+          setUserProfile(data);
+        } else {
+          // First login — create profile using the auth account's real creation date
+          const profile = {
+            id: currentUser.id,
+            verification_status: "unverified",
+            created_at: currentUser.created_at || new Date().toISOString(), // use real signup date
+          };
+          supabase.from("user_profiles").insert([profile]).then(() => setUserProfile(profile));
+        }
+      });
   }, [currentUser]);
 
   useEffect(() => {
@@ -1394,9 +1385,9 @@ export default function Leasio() {
   const isPending    = userProfile?.verification_status === "pending";
   const isUnverified = !isVerified && !isPending;
 
-  // Use real_created_at stored in user_profiles (sourced from auth.getUser(), not JWT)
-  const accountAgeDays = userProfile?.real_created_at
-    ? Math.floor((Date.now() - new Date(userProfile.real_created_at)) / 86400000)
+  // How many days since the auth account was actually created
+  const accountAgeDays = currentUser?.created_at
+    ? Math.floor((Date.now() - new Date(currentUser.created_at)) / 86400000)
     : 0;
   const gracePeriodDays = 3;
   const daysLeft     = Math.max(0, gracePeriodDays - accountAgeDays);
