@@ -396,7 +396,7 @@ const BookingModal = ({ listing, onClose, onBooked }) => {
         handler: function() {
           const order = {
             id:"ord"+Date.now(), listing, total, fee, dep,
-            mode:bookForm.mode, status:"pending_handover", depositStatus:"held",
+            mode:bookForm.mode, depositStatus:"held",
             ownerAddress: listing.full_address||listing.locality+", "+(listing.city||"Bengaluru"),
             ownerPhone:   listing.contact_phone||"+91 98765 43210",
             ownerName:    listing.owner||"Owner",
@@ -788,24 +788,247 @@ const ListingCard = ({ item, onClick }) => {
   );
 };
 
+// ─── CLOUDINARY UPLOAD (shared) ───────────────────────────────────────────────
+const CLOUD_NAME    = import.meta.env.VITE_CLOUDINARY_CLOUD || "";
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_PRESET || "leasio_unsigned";
+async function uploadToCloudinary(file) {
+  if (!CLOUD_NAME) {
+    throw new Error("Cloudinary not configured — add VITE_CLOUDINARY_CLOUD to your .env file");
+  }
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", UPLOAD_PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method:"POST", body:fd });
+  if (!res.ok) {
+    // Parse Cloudinary's actual error message instead of just "Bad Request"
+    let detail = res.statusText;
+    try { const j = await res.json(); detail = j?.error?.message || detail; } catch(_) {}
+    throw new Error(detail);
+  }
+  return (await res.json()).secure_url;
+}
+
+// ─── AADHAAR VERIFICATION MODAL ───────────────────────────────────────────────
+// Validates 12-digit format locally. Real UIDAI API verification requires
+// government-approved KUA integration — use this as the submission layer.
+const AadhaarModal = ({ user, onClose, onVerified }) => {
+  const [step,        setStep]      = useState(1); // 1=number, 2=upload, 3=done
+  const [number,      setNumber]    = useState("");
+  const [imgUrl,      setImgUrl]    = useState(null);
+  const [uploading,   setUploading] = useState(false);
+  const [submitting,  setSubmitting] = useState(false);
+  const [error,       setError]     = useState("");
+
+  const numValid = /^\d{12}$/.test(number);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!CLOUD_NAME) {
+      setError("Cloudinary not set up yet. Add VITE_CLOUDINARY_CLOUD and VITE_CLOUDINARY_PRESET to your .env, then redeploy.");
+      return;
+    }
+    setUploading(true); setError("");
+    try {
+      const url = await uploadToCloudinary(file);
+      setImgUrl(url);
+    } catch(e) {
+      // Common causes: preset not set to Unsigned, wrong cloud name, or preset doesn't exist
+      setError(`Upload failed: ${e.message}. Check that your Cloudinary upload preset "${UPLOAD_PRESET}" exists and is set to Unsigned mode.`);
+    }
+    setUploading(false);
+  };
+
+  const handleSubmit = async () => {
+    if (!numValid || !imgUrl) return;
+    setSubmitting(true); setError("");
+    try {
+      // Store in user_profiles table — status = pending_verification
+      const { error: e } = await supabase.from("user_profiles").upsert({
+        id: user.id,
+        aadhaar_number: number,          // store last 4 only in prod — full number here for demo
+        aadhaar_image_url: imgUrl,
+        verification_status: "pending",
+        submitted_at: new Date().toISOString(),
+      });
+      if (e) throw e;
+      setStep(3);
+      onVerified("pending");
+    } catch(e) { setError("Submission failed: " + e.message); }
+    setSubmitting(false);
+  };
+
+  const inpStyle = { background:"#111318", border:`1px solid ${error?"#EF4444":"#252830"}`, borderRadius:9, padding:"12px 14px", color:"#F0EEE8", fontSize:15, outline:"none", fontFamily:"'DM Sans',sans-serif", width:"100%", boxSizing:"border-box", letterSpacing:3 };
+
+  if (step === 3) return (
+    <Modal onClose={onClose} maxW={420}>
+      <div style={{ textAlign:"center", padding:"16px 0" }}>
+        <div style={{ fontSize:52, marginBottom:12 }}>🪪</div>
+        <div style={{ fontWeight:900, fontSize:20, marginBottom:8 }}>Aadhaar Submitted!</div>
+        <div style={{ color:"#9CA3AF", fontSize:13, lineHeight:1.7, marginBottom:20 }}>
+          Your Aadhaar details are under review.<br/>
+          Verification typically takes <strong style={{ color:"#F0EEE8" }}>24–48 hours</strong>.<br/>
+          Until then, you can post <strong style={{ color:"#F59E0B" }}>1 listing</strong> and make <strong style={{ color:"#F59E0B" }}>1 booking</strong>.
+        </div>
+        <div style={{ background:"#0E1016", borderRadius:12, padding:14, marginBottom:20, textAlign:"left" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#F59E0B", marginBottom:8 }}>WHAT HAPPENS NEXT</div>
+          <div style={{ fontSize:12, color:"#9CA3AF", lineHeight:1.8 }}>
+            ✓ Our team reviews your Aadhaar image<br/>
+            ✓ Number is matched against the image<br/>
+            ✓ You get a notification when verified<br/>
+            ✓ After verification: unlimited listings & bookings
+          </div>
+        </div>
+        <Btn variant="primary" style={{ width:"100%" }} onClick={onClose}>Start Exploring</Btn>
+      </div>
+    </Modal>
+  );
+
+  return (
+    <Modal onClose={null} maxW={460}>
+      {/* No close button — deliberately blocking on first signup */}
+      <div style={{ textAlign:"center", marginBottom:20 }}>
+        <div style={{ fontSize:40, marginBottom:8 }}>🪪</div>
+        <div style={{ fontWeight:900, fontSize:20, marginBottom:4 }}>Verify Your Identity</div>
+        <div style={{ color:"#9CA3AF", fontSize:13 }}>Required to list or book on Leasio. Keeps the community safe.</div>
+      </div>
+
+      <div style={{ display:"flex", gap:4, marginBottom:20 }}>
+        {[1,2].map(i => <div key={i} style={{ flex:1, height:3, borderRadius:2, background:step>=i?"#F59E0B":"#252830" }} />)}
+      </div>
+
+      {step === 1 && <>
+        <InfoBox color="#2563EB" icon="🔒" label="YOUR AADHAAR NUMBER IS SAFE"
+          sub="We store only the last 4 digits publicly. The full number is encrypted and used only for one-time verification." />
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase", marginBottom:8 }}>12-Digit Aadhaar Number</div>
+          <input
+            type="text" inputMode="numeric" maxLength={12}
+            value={number} placeholder="XXXX XXXX XXXX"
+            style={inpStyle}
+            onChange={e => { const v = e.target.value.replace(/\D/g,"").slice(0,12); setNumber(v); setError(""); }}
+          />
+          {number.length > 0 && number.length < 12 && (
+            <div style={{ color:"#EF4444", fontSize:11, marginTop:5 }}>⚠ {12 - number.length} more digits needed</div>
+          )}
+          {numValid && <div style={{ color:"#10B981", fontSize:11, marginTop:5 }}>✓ Valid format</div>}
+        </div>
+        {error && <div style={{ color:"#EF4444", fontSize:12, marginBottom:10 }}>{error}</div>}
+        <Btn variant="primary" style={{ width:"100%", opacity:numValid?1:0.5 }}
+          disabled={!numValid} onClick={() => setStep(2)}>Next — Upload Aadhaar Photo →</Btn>
+        <div style={{ textAlign:"center", marginTop:12 }}>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:"#374151", fontSize:11, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+            Skip for now — I'll verify within 3 days
+          </button>
+        </div>
+      </>}
+
+      {step === 2 && <>
+        <InfoBox color="#7C3AED" icon="📸" label="UPLOAD AADHAAR PHOTO"
+          sub="Photo of front side showing your name, number, and photo. File stays private — never shared publicly." />
+
+        {!imgUrl ? (
+          <label style={{ display:"block", cursor: uploading?"wait":"pointer" }}>
+            <div style={{ border:"2px dashed #252830", borderRadius:12, padding:"28px 16px", textAlign:"center", background:"#0E1016" }}
+              onMouseEnter={e=>e.currentTarget.style.borderColor="#F59E0B60"}
+              onMouseLeave={e=>e.currentTarget.style.borderColor="#252830"}>
+              {uploading ? (
+                <div style={{ color:"#F59E0B", fontWeight:700 }}>⏳ Uploading...</div>
+              ) : (
+                <>
+                  <div style={{ fontSize:36, marginBottom:8 }}>📄</div>
+                  <div style={{ fontSize:13, color:"#9CA3AF" }}>Click to upload Aadhaar photo</div>
+                  <div style={{ fontSize:11, color:"#374151", marginTop:4 }}>JPG or PNG — front side only</div>
+                </>
+              )}
+            </div>
+            <input type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile} />
+          </label>
+        ) : (
+          <div style={{ position:"relative", borderRadius:12, overflow:"hidden", marginBottom:4 }}>
+            <img src={imgUrl} alt="Aadhaar" style={{ width:"100%", maxHeight:200, objectFit:"cover", borderRadius:12 }} />
+            <div style={{ position:"absolute", top:8, right:8 }}>
+              <button onClick={() => setImgUrl(null)} style={{ background:"#EF4444", border:"none", borderRadius:6, color:"#fff", padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"'DM Sans',sans-serif" }}>Retake</button>
+            </div>
+            <div style={{ position:"absolute", bottom:8, left:8, background:"rgba(16,185,129,.9)", borderRadius:6, padding:"3px 10px", fontSize:11, fontWeight:700, color:"#fff" }}>✓ Uploaded</div>
+          </div>
+        )}
+
+        {error && <div style={{ color:"#EF4444", fontSize:12, marginTop:8, marginBottom:8 }}>{error}</div>}
+
+        <div style={{ display:"flex", gap:8, marginTop:16 }}>
+          <Btn variant="ghost" onClick={() => setStep(1)}>← Back</Btn>
+          <Btn variant="primary" style={{ flex:1, opacity:imgUrl?1:0.5 }}
+            disabled={!imgUrl || submitting} onClick={handleSubmit}>
+            {submitting ? "Submitting..." : "Submit for Verification ✓"}
+          </Btn>
+        </div>
+        <div style={{ textAlign:"center", marginTop:12 }}>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:"#374151", fontSize:11, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+            Skip for now — I'll verify within 3 days
+          </button>
+        </div>
+      </>}
+    </Modal>
+  );
+};
+
+// ─── VERIFICATION BANNER ──────────────────────────────────────────────────────
+const VerificationBanner = ({ profile, onVerifyNow, daysLeft }) => {
+  if (!profile || profile.verification_status === "verified") return null;
+  const isPending = profile.verification_status === "pending";
+  const isExpired = daysLeft !== null && daysLeft <= 0;
+
+  if (isPending) return (
+    <div style={{ background:"#1C1F27", borderLeft:"4px solid #F59E0B", padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+      <span style={{ fontSize:18 }}>⏳</span>
+      <div style={{ flex:1 }}>
+        <span style={{ fontWeight:700, fontSize:13 }}>Aadhaar verification pending</span>
+        <span style={{ color:"#9CA3AF", fontSize:12, marginLeft:8 }}>Our team is reviewing your documents · 24–48 hours</span>
+      </div>
+      <Tag c="#F59E0B">Unverified</Tag>
+    </div>
+  );
+
+  return (
+    <div style={{ background: isExpired?"#2D0A0A":"#1A130A", borderLeft:`4px solid ${isExpired?"#EF4444":"#F59E0B"}`, padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+      <span style={{ fontSize:18 }}>{isExpired?"🚫":"⚠️"}</span>
+      <div style={{ flex:1 }}>
+        {isExpired ? (
+          <><span style={{ fontWeight:700, fontSize:13, color:"#EF4444" }}>Account restricted — </span><span style={{ color:"#9CA3AF", fontSize:12 }}>Aadhaar verification required to continue listing or booking.</span></>
+        ) : (
+          <><span style={{ fontWeight:700, fontSize:13 }}>Unverified account — </span><span style={{ color:"#9CA3AF", fontSize:12 }}>1 listing · 1 booking allowed. {daysLeft > 0 ? `${daysLeft} day${daysLeft > 1 ? "s" : ""} left to verify.` : "Verify now to unlock full access."}</span></>
+        )}
+      </div>
+      <Btn variant={isExpired?"danger":"primary"} style={{ fontSize:12, padding:"6px 14px" }} onClick={onVerifyNow}>
+        🪪 Verify Now
+      </Btn>
+    </div>
+  );
+};
+
 // ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }) => {
-  const [mode, setMode]     = useState('login');
-  const [email, setEmail]   = useState('');
+  const [mode, setMode]       = useState('login');
+  const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState('');
+  const [error, setError]     = useState('');
 
   const handle = async () => {
+    if (loading || !email || !password) return;
     setLoading(true); setError('');
     try {
-      const fn = mode==='login' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
-      const { data, error:e } = await fn.call(supabase.auth, { email, password });
+      const fn = mode === 'login' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
+      const { data, error: e } = await fn.call(supabase.auth, { email, password });
       if (e) throw e;
-      onLogin(data.user);
-    } catch(e) { setError(mode==='login'?'Invalid email or password':'Signup failed: '+e.message); }
+      onLogin(data.user, mode === 'signup');
+    } catch(e) { setError(mode === 'login' ? 'Invalid email or password' : 'Signup failed: ' + e.message); }
     setLoading(false);
   };
+
+  // Enter key works from any field
+  const onKey = e => { if (e.key === 'Enter') handle(); };
 
   const inp = { background:"#111318", border:"1px solid #252830", borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:"'DM Sans',sans-serif", width:"100%", boxSizing:"border-box" };
 
@@ -815,20 +1038,25 @@ const LoginScreen = ({ onLogin }) => {
         <div style={{ fontSize:32, fontWeight:900, color:"#F59E0B", marginBottom:4 }}>🏪 Leasio</div>
         <div style={{ color:"#6B7280", marginBottom:20, fontSize:13 }}>{mode==='login'?'Sign in to continue':'Create your account'}</div>
         <div style={{ display:"flex", gap:8, marginBottom:20 }}>
-          {['login','signup'].map(m => <button key={m} onClick={()=>setMode(m)} style={{ flex:1, background:mode===m?"#F59E0B":"#111318", color:mode===m?"#0C0E14":"#9CA3AF", border:"1px solid #252830", borderRadius:8, padding:"8px", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>{m==='login'?'Sign In':'Sign Up'}</button>)}
+          {['login','signup'].map(m => <button key={m} onClick={()=>{ setMode(m); setError(''); }} style={{ flex:1, background:mode===m?"#F59E0B":"#111318", color:mode===m?"#0C0E14":"#9CA3AF", border:"1px solid #252830", borderRadius:8, padding:"8px", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>{m==='login'?'Sign In':'Sign Up'}</button>)}
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
             <span style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase" }}>Email</span>
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" style={inp} />
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={onKey} placeholder="you@example.com" style={inp} autoFocus />
           </label>
           <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
             <span style={{ fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase" }}>Password</span>
-            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" style={inp} onKeyDown={e=>e.key==='Enter'&&handle()} />
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={onKey} placeholder="••••••••" style={inp} />
           </label>
+          {mode==='signup'&&(
+            <div style={{ background:"#0E1016", borderRadius:9, padding:10, fontSize:11, color:"#6B7280", lineHeight:1.6 }}>
+              🪪 After signing up, you'll be asked to verify your Aadhaar. Unverified accounts can post 1 listing and make 1 booking for the first 3 days.
+            </div>
+          )}
           {error&&<div style={{ color:"#EF4444", fontSize:12 }}>{error}</div>}
           <button onClick={handle} disabled={loading||!email||!password}
-            style={{ background:"#F59E0B", color:"#0C0E14", border:"none", borderRadius:9, padding:"11px 18px", cursor:"pointer", fontWeight:700, fontSize:14, fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
+            style={{ background:"#F59E0B", color:"#0C0E14", border:"none", borderRadius:9, padding:"11px 18px", cursor: loading||!email||!password?"not-allowed":"pointer", fontWeight:700, fontSize:14, fontFamily:"'DM Sans',sans-serif", marginTop:4, opacity:loading||!email||!password?0.7:1 }}>
             {loading?'Please wait...':mode==='login'?'Sign In →':'Create Account →'}
           </button>
         </div>
@@ -921,10 +1149,11 @@ const OrdersView = ({ orders, setView, onManageBooking, onRateBooking }) => (
 );
 
 // ─── ITEM DETAIL ──────────────────────────────────────────────────────────────
-const ItemDetail = ({ item, setSelected, setBookingModal, setBuyModal }) => {
+const ItemDetail = ({ item, setSelected, setBookingModal, setBuyModal, currentUser }) => {
   const [reviews, setReviews] = useState([]);
   const lt = item.listingType;
   const ts = typeStyle[lt];
+  const isOwnListing = currentUser && (item.ownerId === currentUser.id || item.owner_id === currentUser.id);
 
   useEffect(() => {
     if (typeof item.id !== 'string') return;
@@ -1049,17 +1278,27 @@ const ItemDetail = ({ item, setSelected, setBookingModal, setBuyModal }) => {
         </div>
 
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          {lt==="item"&&(item.subtype==="rent"||item.subtype==="both")&&item.availableQty>0&&(
-            <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>🔑 Rent Securely</Btn>
-          )}
-          {lt!=="item"&&item.availableQty!==0&&(
-            <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>
-              {lt==="venue"?"📅 Reserve Venue":"📋 Book Session"}
-            </Btn>
-          )}
-          {lt==="item"&&item.buyPrice&&(item.subtype==="buy"||item.subtype==="both")&&(
-            <Btn variant="success" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBuyModal(item)}>🛒 Buy Now — {fmt(item.buyPrice)}</Btn>
-          )}
+          {isOwnListing ? (
+            <div style={{ width:"100%", background:"#1C1F27", border:"1px solid #252830", borderRadius:10, padding:"12px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:20 }}>🏷️</span>
+              <div>
+                <div style={{ fontWeight:700, fontSize:13, color:"#F0EEE8" }}>This is your listing</div>
+                <div style={{ fontSize:11, color:"#6B7280", marginTop:2 }}>You can't book your own item. Manage it from the Owner tab.</div>
+              </div>
+            </div>
+          ) : <>
+            {lt==="item"&&(item.subtype==="rent"||item.subtype==="both")&&item.availableQty>0&&(
+              <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>🔑 Rent Securely</Btn>
+            )}
+            {lt!=="item"&&item.availableQty!==0&&(
+              <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>
+                {lt==="venue"?"📅 Reserve Venue":"📋 Book Session"}
+              </Btn>
+            )}
+            {lt==="item"&&item.buyPrice&&(item.subtype==="buy"||item.subtype==="both")&&(
+              <Btn variant="success" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBuyModal(item)}>🛒 Buy Now — {fmt(item.buyPrice)}</Btn>
+            )}
+          </>}
         </div>
       </div>
     </div>
@@ -1108,23 +1347,162 @@ const BrowseView = ({ filtered, allCats, search, setSearch, locality, setLocalit
   );
 };
 
+// ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
+const OwnerDashboard = ({ listings, incomingBookings, onApprove, onReject, onRefresh }) => {
+  const [tab, setTab] = useState("requests");
+  const F = "'DM Sans',sans-serif";
+
+  const pending   = incomingBookings.filter(b => b.status === 'pending_approval');
+  const approved  = incomingBookings.filter(b => ['pending_handover','active','completed'].includes(b.status));
+  const rejected  = incomingBookings.filter(b => b.status === 'rejected');
+
+  const statusBadge = (s) => {
+    const map = {
+      pending_approval:  { color:"#F59E0B", bg:"#F59E0B15", label:"⏳ Awaiting your approval" },
+      pending_handover:  { color:"#6366F1", bg:"#6366F115", label:"✅ Approved — awaiting handover" },
+      active:            { color:"#10B981", bg:"#10B98115", label:"🔄 Active rental" },
+      completed:         { color:"#9CA3AF", bg:"#9CA3AF15", label:"✔ Completed" },
+      rejected:          { color:"#EF4444", bg:"#EF444415", label:"🚫 Rejected" },
+      cancelled:         { color:"#6B7280", bg:"#6B728015", label:"↩ Cancelled" },
+    };
+    const m = map[s] || { color:"#9CA3AF", bg:"#9CA3AF15", label:s };
+    return <span style={{ fontSize:10, fontWeight:700, color:m.color, background:m.bg, borderRadius:6, padding:"2px 8px" }}>{m.label}</span>;
+  };
+
+  const BookingCard = ({ b, showActions }) => (
+    <div style={{ background:"#13151C", border:"1px solid #1E2130", borderRadius:12, padding:16, marginBottom:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+        <div>
+          <div style={{ fontWeight:700, fontSize:14, color:"#F0EEE8", marginBottom:2 }}>
+            {b.listings?.emoji} {b.listings?.title || "Listing"}
+          </div>
+          <div style={{ fontSize:11, color:"#6B7280" }}>{b.listings?.locality}</div>
+        </div>
+        {statusBadge(b.status)}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px,1fr))", gap:10, marginBottom:showActions?14:0 }}>
+        {[
+          ["👤 Renter", b.renter_name || "—"],
+          ["📞 Phone",  b.renter_phone || "—"],
+          ["📅 Date",   b.start_date ? new Date(b.start_date).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "—"],
+          ["⏰ Slot",   b.slot || (b.hours ? b.hours+"h" : "—")],
+          ["💰 Amount", b.total_rent ? `₹${Number(b.total_rent).toLocaleString("en-IN")}` : "—"],
+          ["🏠 Address", b.renter_address || "—"],
+        ].map(([label, val]) => (
+          <div key={label} style={{ background:"#0E1016", borderRadius:8, padding:"8px 10px" }}>
+            <div style={{ fontSize:10, color:"#6B7280", marginBottom:2 }}>{label}</div>
+            <div style={{ fontSize:12, color:"#F0EEE8", fontWeight:600, wordBreak:"break-word" }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {showActions && (
+        <div style={{ display:"flex", gap:8, marginTop:4 }}>
+          <button onClick={() => onApprove(b)}
+            style={{ flex:1, background:"#10B98120", border:"1.5px solid #10B981", borderRadius:9, padding:"9px 14px", color:"#10B981", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:F }}>
+            ✅ Approve Booking
+          </button>
+          <button onClick={() => onReject(b)}
+            style={{ flex:1, background:"#EF444415", border:"1.5px solid #EF4444", borderRadius:9, padding:"9px 14px", color:"#EF4444", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:F }}>
+            🚫 Reject
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily:F, maxWidth:860, margin:"0 auto", padding:24 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+        <div style={{ fontWeight:900, fontSize:22 }}>Owner Dashboard</div>
+        <button onClick={onRefresh}
+          style={{ background:"#1C1F27", border:"1px solid #252830", borderRadius:8, padding:"7px 14px", color:"#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:F }}>
+          🔄 Refresh
+        </button>
+      </div>
+      <div style={{ color:"#6B7280", fontSize:13, marginBottom:20 }}>Manage booking requests for your listings</div>
+
+      {/* My listings summary */}
+      {listings.length > 0 && (
+        <div style={{ background:"#13151C", border:"1px solid #1E2130", borderRadius:12, padding:16, marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:800, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase", marginBottom:12 }}>Your Listings</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {listings.map(l => (
+              <div key={l.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"#0E1016", borderRadius:8 }}>
+                <span style={{ fontSize:20 }}>{l.emoji}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#F0EEE8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</div>
+                  <div style={{ fontSize:11, color:"#6B7280" }}>{l.locality}, {l.city}</div>
+                </div>
+                <span style={{ fontSize:10, fontWeight:700, color:l.available?"#10B981":"#EF4444", background:l.available?"#10B98115":"#EF444415", borderRadius:6, padding:"2px 8px", whiteSpace:"nowrap" }}>
+                  {l.available ? "● Active" : "● Unavailable"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display:"flex", gap:6, marginBottom:18 }}>
+        {[
+          { id:"requests", label:`Requests`, count:pending.length },
+          { id:"approved", label:"Approved",  count:approved.length },
+          { id:"rejected", label:"Rejected",  count:rejected.length },
+        ].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            style={{ background:tab===t.id?"#F59E0B20":"#111318", border:`2px solid ${tab===t.id?"#F59E0B":"#252830"}`, borderRadius:9, padding:"7px 14px", cursor:"pointer", color:tab===t.id?"#F59E0B":"#9CA3AF", fontWeight:700, fontSize:12, fontFamily:F, display:"flex", alignItems:"center", gap:6 }}>
+            {t.label}
+            {t.count > 0 && <span style={{ background:tab===t.id?"#F59E0B":"#252830", color:tab===t.id?"#0C0E14":"#9CA3AF", borderRadius:"50%", width:18, height:18, fontSize:9, fontWeight:900, display:"inline-flex", alignItems:"center", justifyContent:"center" }}>{t.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      {tab === "requests" && (
+        pending.length === 0
+          ? <div style={{ textAlign:"center", padding:"48px 24px", color:"#6B7280" }}>
+              <div style={{ fontSize:36, marginBottom:12 }}>📭</div>
+              <div style={{ fontWeight:700, color:"#9CA3AF" }}>No pending requests</div>
+              <div style={{ fontSize:13, marginTop:4 }}>New booking requests will appear here</div>
+            </div>
+          : pending.map(b => <BookingCard key={b.id} b={b} showActions={true} />)
+      )}
+      {tab === "approved" && (
+        approved.length === 0
+          ? <div style={{ textAlign:"center", padding:"48px 24px", color:"#6B7280" }}>No approved bookings yet</div>
+          : approved.map(b => <BookingCard key={b.id} b={b} showActions={false} />)
+      )}
+      {tab === "rejected" && (
+        rejected.length === 0
+          ? <div style={{ textAlign:"center", padding:"48px 24px", color:"#6B7280" }}>No rejected bookings</div>
+          : rejected.map(b => <BookingCard key={b.id} b={b} showActions={false} />)
+      )}
+    </div>
+  );
+};
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function Leasio() {
-  const [listings,    setListings]    = useState([]);
-  const [view,        setView]        = useState("browse");
-  const [selected,    setSelected]    = useState(null);
-  const [search,      setSearch]      = useState("");
-  const [locality,    setLocality]    = useState("");
-  const [filterLT,    setFilterLT]    = useState("all");
-  const [filterSale,  setFilterSale]  = useState(false);
-  const [filterCat,   setFilterCat]   = useState("All");
-  const [toasts,      setToasts]      = useState([]);
-  const [bookingModal, setBookingModal] = useState(null);
-  const [buyModal,    setBuyModal]    = useState(null);
-  const [orders,      setOrders]      = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [manageOrder, setManageOrder] = useState(null);
-  const [rateOrder,   setRateOrder]   = useState(null);
+  const [listings,      setListings]      = useState([]);
+  const [view,          setView]          = useState("browse");
+  const [selected,      setSelected]      = useState(null);
+  const [search,        setSearch]        = useState("");
+  const [locality,      setLocality]      = useState("");
+  const [filterLT,      setFilterLT]      = useState("all");
+  const [filterSale,    setFilterSale]    = useState(false);
+  const [filterCat,     setFilterCat]     = useState("All");
+  const [toasts,        setToasts]        = useState([]);
+  const [bookingModal,  setBookingModal]  = useState(null);
+  const [buyModal,      setBuyModal]      = useState(null);
+  const [orders,        setOrders]        = useState([]);
+  const [currentUser,   setCurrentUser]   = useState(null);
+  const [manageOrder,   setManageOrder]   = useState(null);
+  const [rateOrder,     setRateOrder]     = useState(null);
+  const [userProfile,   setUserProfile]   = useState(null);
+  const [showAadhaar,   setShowAadhaar]   = useState(false);
+  const [incomingBookings, setIncomingBookings] = useState([]);
 
   useEffect(() => {
     fetchListings().then(data => setListings(data.length?data:SEED)).catch(()=>setListings(SEED));
@@ -1139,6 +1517,60 @@ export default function Leasio() {
   useEffect(() => {
     if (!currentUser) return;
     fetchMyBookings(currentUser.id).then(setOrders).catch(console.error);
+
+    // Fetch incoming booking requests for owner dashboard
+    supabase.from('bookings')
+      .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
+      .eq('owner_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        console.log("[incomingBookings] fetch:", data, error);
+        if (data) setIncomingBookings(data);
+      });
+
+    supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
+      .then(async ({ data }) => {
+        // Always get the authoritative date from auth.users server-side —
+        // never trust the stored value since it may have been backfilled incorrectly
+        const { data: realCreatedAt } = await supabase.rpc("get_my_created_at");
+
+        if (data) {
+          // Always overwrite real_created_at with the server truth
+          await supabase.from("user_profiles")
+            .update({ real_created_at: realCreatedAt })
+            .eq("id", currentUser.id);
+          setUserProfile({ ...data, real_created_at: realCreatedAt });
+        } else {
+          const profile = { id: currentUser.id, verification_status: "unverified", real_created_at: realCreatedAt };
+          await supabase.from("user_profiles").insert([profile]);
+          setUserProfile(profile);
+        }
+      });
+  }, [currentUser]);
+
+  // Realtime subscription for owner incoming bookings — separate useEffect so cleanup works
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fetchIncoming = () => {
+      supabase.from('bookings')
+        .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
+        .eq('owner_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .then(({ data }) => { if (data) setIncomingBookings(data); });
+    };
+
+    const channel = supabase.channel(`owner-${currentUser.id}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'bookings',
+        filter: `owner_id=eq.${currentUser.id}`
+      }, () => {
+        // Re-fetch with full join so listing emoji/title are included
+        fetchIncoming();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [currentUser]);
 
   useEffect(() => {
@@ -1149,14 +1581,63 @@ export default function Leasio() {
 
   const toast = msg => { const id=Date.now(); setToasts(t=>[...t,{id,msg}]); setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000); };
 
+  // ── Verification helpers ────────────────────────────────────────────────────
+  const isVerified   = userProfile?.verification_status === "verified";
+  const isPending    = userProfile?.verification_status === "pending";
+  const isUnverified = !isVerified && !isPending;
+
+  // Use real_created_at stored in user_profiles (sourced from auth.getUser(), not JWT)
+  const accountAgeDays = userProfile?.real_created_at
+    ? Math.floor((Date.now() - new Date(userProfile.real_created_at)) / 86400000)
+    : 0;
+  const gracePeriodDays = 3;
+  const daysLeft     = Math.max(0, gracePeriodDays - accountAgeDays);
+  const graceExpired = accountAgeDays >= gracePeriodDays;
+
+  // Unverified limits: 1 listing, 1 booking (only within grace period)
+  const myListingsCount = listings.filter(l => l.owner_id === currentUser?.id).length;
+  const myBookingsCount = orders.length;
+
+  const canList = () => {
+    if (isVerified || isPending) return true; // pending users keep trial access
+    if (graceExpired) return false;            // after 3 days, blocked
+    return myListingsCount < 1;                // within grace: max 1
+  };
+
+  const canBook = () => {
+    if (isVerified || isPending) return true;
+    if (graceExpired) return false;
+    return myBookingsCount < 1;
+  };
+
+  // Called after listing attempt when blocked
+  const guardList = () => {
+    if (canList()) return true;
+    setShowAadhaar(true);
+    toast("🪪 Please verify your Aadhaar to post more listings.");
+    return false;
+  };
+
+  const guardBook = () => {
+    if (canBook()) return true;
+    setShowAadhaar(true);
+    toast("🪪 Please verify your Aadhaar to make more bookings.");
+    return false;
+  };
+
   const handleBooked = async (order) => {
+    if (!guardBook()) return;
     if (currentUser && order.listing.id && typeof order.listing.id==="string") {
+      // ownerId comes from mapListing which maps row.owner_id → ownerId
+      const ownerId = order.listing.ownerId || order.listing.owner_id || null;
+      console.log("[handleBooked] listing:", order.listing.id, "ownerId:", ownerId, "renter:", currentUser.id);
       try {
-        const {error:e} = await supabase.from('bookings').insert([{
+        const {data: newBooking, error:e} = await supabase.from('bookings').insert([{
           listing_id:    order.listing.id,
           renter_id:     currentUser.id,
+          owner_id:      ownerId,
           booking_type:  order.listing.listingType,
-          status:        'pending_handover',
+          status:        'pending_approval',
           start_date:    order.date||null,
           slot:          order.slot||null,
           hours:         order.hours||null,
@@ -1170,17 +1651,17 @@ export default function Leasio() {
           renter_address:order.renterAddress,
           owner_address: order.ownerAddress||null,
           owner_phone:   order.ownerPhone||null,
-        }]);
-        if (e) toast('⚠️ Saved locally: '+e.message);
-      } catch(err) { console.error(err); }
+        }]).select().single();
+        if (e) {
+          console.error("[handleBooked] insert error:", e);
+          toast('⚠️ Saved locally: '+e.message);
+        } else {
+          console.log("[handleBooked] saved to DB:", newBooking);
+        }
+      } catch(err) { console.error("[handleBooked] exception:", err); }
     }
-    setOrders(o=>[...o,order]);
-    setListings(ls=>ls.map(l => {
-      if (l.id!==order.listing.id) return l;
-      const newQty=Math.max(0,l.availableQty-(order.qty||1));
-      return {...l, availableQty:newQty, available:newQty>0};
-    }));
-    toast("✅ Booking confirmed! Owner details unlocked.");
+    setOrders(o=>[...o,{...order, status:'pending_approval'}]);
+    toast("📨 Booking request sent! Waiting for owner approval.");
     setView("orders");
   };
 
@@ -1222,7 +1703,34 @@ export default function Leasio() {
     toast("⭐ Thanks! Your rating has been submitted and trust scores updated.");
   };
 
-  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
+  const handleApproveBooking = async (booking) => {
+    const { error } = await supabase.from('bookings')
+      .update({ status: 'pending_handover' })
+      .eq('id', booking.id);
+    if (error) { toast('❌ ' + error.message); return; }
+    setIncomingBookings(bs => bs.map(b => b.id===booking.id ? {...b, status:'pending_handover'} : b));
+    // Also decrement available qty on the listing
+    setListings(ls => ls.map(l => {
+      if (l.id !== booking.listing_id) return l;
+      const newQty = Math.max(0, (l.availableQty||1) - (booking.qty||1));
+      return {...l, availableQty: newQty, available: newQty > 0};
+    }));
+    toast("✅ Booking approved! Renter has been notified.");
+  };
+
+  const handleRejectBooking = async (booking) => {
+    const { error } = await supabase.from('bookings')
+      .update({ status: 'rejected' })
+      .eq('id', booking.id);
+    if (error) { toast('❌ ' + error.message); return; }
+    setIncomingBookings(bs => bs.map(b => b.id===booking.id ? {...b, status:'rejected'} : b));
+    toast("🚫 Booking rejected.");
+  };
+
+  if (!currentUser) return <LoginScreen onLogin={(user, isNewSignup) => {
+    setCurrentUser(user);
+    if (isNewSignup) setTimeout(() => setShowAadhaar(true), 600); // slight delay so main UI renders first
+  }} />;
 
   const filtered = listings.filter(l => {
     const ms = !search||l.title.toLowerCase().includes(search.toLowerCase())||(l.description||"").toLowerCase().includes(search.toLowerCase());
@@ -1249,12 +1757,29 @@ export default function Leasio() {
       <div style={S.bar}>
         <div style={{ fontSize:19, fontWeight:900, color:"#F59E0B", letterSpacing:-1, cursor:"pointer", whiteSpace:"nowrap" }} onClick={() => { setView("browse"); setSelected(null); }}>🏪 Leasio</div>
         <div style={{ flex:1 }} />
-        {[{id:"browse",l:"Browse"},{id:"list",l:"+ List"},{id:"orders",l:"Orders"}].map(t=>(
-          <button key={t.id} style={S.nav(view===t.id&&!selected)} onClick={() => { setView(t.id); setSelected(null); }}>{t.l}</button>
+        {[{id:"browse",l:"Browse"},{id:"list",l:"+ List"},{id:"orders",l:"Orders"},{id:"owner",l:"Owner"}].map(t=>(
+          <button key={t.id} style={S.nav(view===t.id&&!selected)} onClick={() => {
+            if (t.id === "list" && !guardList()) return;
+            setView(t.id); setSelected(null);
+          }}>
+            {t.l}
+            {t.id==="owner" && incomingBookings.filter(b=>b.status==='pending_approval').length > 0 && (
+              <span style={{ background:"#EF4444", color:"#fff", borderRadius:"50%", width:16, height:16, fontSize:9, fontWeight:900, display:"inline-flex", alignItems:"center", justifyContent:"center", marginLeft:4 }}>
+                {incomingBookings.filter(b=>b.status==='pending_approval').length}
+              </span>
+            )}
+          </button>
         ))}
         <button style={{ background:"none", border:"none", color:"#6B7280", fontSize:12, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}
           onClick={() => { supabase.auth.signOut(); setCurrentUser(null); }}>Sign Out</button>
       </div>
+
+      {/* Verification banner — sits below topbar */}
+      <VerificationBanner
+        profile={userProfile}
+        daysLeft={daysLeft}
+        onVerifyNow={() => setShowAadhaar(true)}
+      />
 
       {view==="browse"&&!selected&&(
         <div style={{ background:"linear-gradient(155deg,#130A00 0%,#080A14 50%,#0C0E14 100%)", borderBottom:"1px solid #1E2130", padding:"36px 24px 28px", textAlign:"center" }}>
@@ -1270,12 +1795,26 @@ export default function Leasio() {
       )}
 
       {selected
-        ? <ItemDetail item={selected} setSelected={setSelected} setBookingModal={setBookingModal} setBuyModal={setBuyModal} />
+        ? <ItemDetail item={selected} setSelected={setSelected} setBookingModal={setBookingModal} setBuyModal={setBuyModal} currentUser={currentUser} />
         : view==="browse"
           ? <BrowseView filtered={filtered} allCats={allCats} search={search} setSearch={setSearch} locality={locality} setLocality={setLocality} filterLT={filterLT} setFilterLT={setFilterLT} filterSale={filterSale} setFilterSale={setFilterSale} filterCat={filterCat} setFilterCat={setFilterCat} setSelected={setSelected} toast={toast} />
           : view==="list"
             ? <ListForm setListings={setListings} setView={setView} toast={toast} />
-            : <OrdersView orders={orders} setView={setView} onManageBooking={setManageOrder} onRateBooking={setRateOrder} />
+            : view==="owner"
+              ? <OwnerDashboard
+                  listings={listings.filter(l => l.ownerId===currentUser.id || l.owner_id===currentUser.id)}
+                  incomingBookings={incomingBookings}
+                  onApprove={handleApproveBooking}
+                  onReject={handleRejectBooking}
+                  onRefresh={() => {
+                    supabase.from('bookings')
+                      .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
+                      .eq('owner_id', currentUser.id)
+                      .order('created_at', { ascending: false })
+                      .then(({ data }) => { if (data) setIncomingBookings(data); });
+                  }}
+                />
+              : <OrdersView orders={orders} setView={setView} onManageBooking={setManageOrder} onRateBooking={setRateOrder} />
       }
 
       {bookingModal&&<BookingModal listing={bookingModal} onClose={()=>setBookingModal(null)} onBooked={handleBooked} />}
@@ -1286,6 +1825,14 @@ export default function Leasio() {
       }} />}
       {manageOrder&&<CancelEditModal order={manageOrder} onClose={()=>setManageOrder(null)} onCancelled={handleCancelled} onRescheduled={handleRescheduled} />}
       {rateOrder&&<RatingModal order={rateOrder} onClose={()=>setRateOrder(null)} onSubmitted={handleRatingSubmitted} />}
+      {showAadhaar&&currentUser&&<AadhaarModal
+        user={currentUser}
+        onClose={() => setShowAadhaar(false)}
+        onVerified={(status) => {
+          setUserProfile(p => ({...p, verification_status: status}));
+          setShowAadhaar(false);
+        }}
+      />}
 
       <style>{`
         @keyframes slideIn { from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)} }

@@ -1518,14 +1518,22 @@ export default function Leasio() {
     if (!currentUser) return;
     fetchMyBookings(currentUser.id).then(setOrders).catch(console.error);
 
-    // Fetch incoming booking requests for owner dashboard
-    supabase.from('bookings')
-      .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
+    // Fetch incoming booking requests — query by listing_id, not owner_id column
+    // (owner_id column on bookings may be null; this approach always works)
+    supabase.from('listings')
+      .select('id')
       .eq('owner_id', currentUser.id)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        console.log("[incomingBookings] fetch:", data, error);
-        if (data) setIncomingBookings(data);
+      .then(({ data: myListings }) => {
+        if (!myListings || myListings.length === 0) return;
+        const ids = myListings.map(l => l.id);
+        supabase.from('bookings')
+          .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
+          .in('listing_id', ids)
+          .order('created_at', { ascending: false })
+          .then(({ data, error }) => {
+            console.log('[incomingBookings] fetched:', data?.length, error?.message);
+            if (data) setIncomingBookings(data);
+          });
       });
 
     supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
@@ -1548,27 +1556,30 @@ export default function Leasio() {
       });
   }, [currentUser]);
 
-  // Realtime subscription for owner incoming bookings — separate useEffect so cleanup works
   useEffect(() => {
     if (!currentUser) return;
 
-    const fetchIncoming = () => {
-      supabase.from('bookings')
+    const fetchIncoming = async () => {
+      const { data: myListings } = await supabase
+        .from('listings').select('id').eq('owner_id', currentUser.id);
+      if (!myListings || myListings.length === 0) return;
+      const ids = myListings.map(l => l.id);
+      const { data } = await supabase.from('bookings')
         .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
-        .eq('owner_id', currentUser.id)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => { if (data) setIncomingBookings(data); });
+        .in('listing_id', ids)
+        .order('created_at', { ascending: false });
+      if (data) setIncomingBookings(data);
     };
 
-    const channel = supabase.channel(`owner-${currentUser.id}`)
+    const channel = supabase.channel(`owner-bookings-${currentUser.id}`)
       .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'bookings',
-        filter: `owner_id=eq.${currentUser.id}`
+        event: '*', schema: 'public', table: 'bookings'
       }, () => {
-        // Re-fetch with full join so listing emoji/title are included
         fetchIncoming();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[realtime] bookings channel:', status);
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [currentUser]);
@@ -1627,40 +1638,61 @@ export default function Leasio() {
 
   const handleBooked = async (order) => {
     if (!guardBook()) return;
-    if (currentUser && order.listing.id && typeof order.listing.id==="string") {
-      // ownerId comes from mapListing which maps row.owner_id → ownerId
+
+    // Close venue/item detail page immediately — setSelected must be cleared
+    setSelected(null);
+    setBookingModal(null);
+
+    if (currentUser && order.listing.id && typeof order.listing.id === "string") {
       const ownerId = order.listing.ownerId || order.listing.owner_id || null;
-      console.log("[handleBooked] listing:", order.listing.id, "ownerId:", ownerId, "renter:", currentUser.id);
+      console.log("[handleBooked] listing_id:", order.listing.id, "ownerId:", ownerId);
       try {
-        const {data: newBooking, error:e} = await supabase.from('bookings').insert([{
-          listing_id:    order.listing.id,
-          renter_id:     currentUser.id,
-          owner_id:      ownerId,
-          booking_type:  order.listing.listingType,
-          status:        'pending_approval',
-          start_date:    order.date||null,
-          slot:          order.slot||null,
-          hours:         order.hours||null,
-          qty:           order.qty||1,
-          delivery_mode: order.mode||'self',
-          total_rent:    order.total,
-          platform_fee:  order.fee,
-          deposit_amount:order.dep,
-          renter_name:   order.renterName,
-          renter_phone:  order.renterPhone,
-          renter_address:order.renterAddress,
-          owner_address: order.ownerAddress||null,
-          owner_phone:   order.ownerPhone||null,
+        const { data: newBooking, error: e } = await supabase.from('bookings').insert([{
+          listing_id:     order.listing.id,
+          renter_id:      currentUser.id,
+          owner_id:       ownerId,
+          booking_type:   order.listing.listingType,
+          status:         'pending_approval',
+          start_date:     order.date   || null,
+          slot:           order.slot   || null,
+          hours:          order.hours  || null,
+          qty:            order.qty    || 1,
+          delivery_mode:  order.mode   || 'self',
+          total_rent:     order.total,
+          platform_fee:   order.fee,
+          deposit_amount: order.dep,
+          renter_name:    order.renterName,
+          renter_phone:   order.renterPhone,
+          renter_address: order.renterAddress,
+          owner_address:  order.ownerAddress || null,
+          owner_phone:    order.ownerPhone   || null,
         }]).select().single();
+
         if (e) {
-          console.error("[handleBooked] insert error:", e);
-          toast('⚠️ Saved locally: '+e.message);
+          console.error("[handleBooked] DB error:", e.message, e.code);
+          toast('⚠️ Could not save booking: ' + e.message);
         } else {
-          console.log("[handleBooked] saved to DB:", newBooking);
+          console.log("[handleBooked] saved:", newBooking?.id);
+          // Immediately refresh renter's own bookings from DB
+          fetchMyBookings(currentUser.id).then(data => { if (data.length) setOrders(data); });
+          // Refresh owner dashboard by listing_id (works even if owner_id col is null)
+          const myListingIds = listings
+            .filter(l => l.ownerId === currentUser.id || l.owner_id === currentUser.id)
+            .map(l => l.id);
+          if (myListingIds.length) {
+            supabase.from('bookings')
+              .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
+              .in('listing_id', myListingIds)
+              .order('created_at', { ascending: false })
+              .then(({ data }) => { if (data) setIncomingBookings(data); });
+          }
         }
-      } catch(err) { console.error("[handleBooked] exception:", err); }
+      } catch (err) {
+        console.error("[handleBooked] exception:", err);
+      }
     }
-    setOrders(o=>[...o,{...order, status:'pending_approval'}]);
+
+    setOrders(o => [...o, { ...order, status: 'pending_approval' }]);
     toast("📨 Booking request sent! Waiting for owner approval.");
     setView("orders");
   };
@@ -1706,23 +1738,24 @@ export default function Leasio() {
   const handleApproveBooking = async (booking) => {
     const { error } = await supabase.from('bookings')
       .update({ status: 'pending_handover' })
-      .eq('id', booking.id);
-    if (error) { toast('❌ ' + error.message); return; }
+      .eq('id', booking.id)
+      .eq('listing_id', booking.listing_id); // helps RLS via listing join
+    if (error) { toast('❌ Approve failed: ' + error.message); console.error(error); return; }
     setIncomingBookings(bs => bs.map(b => b.id===booking.id ? {...b, status:'pending_handover'} : b));
-    // Also decrement available qty on the listing
     setListings(ls => ls.map(l => {
       if (l.id !== booking.listing_id) return l;
       const newQty = Math.max(0, (l.availableQty||1) - (booking.qty||1));
       return {...l, availableQty: newQty, available: newQty > 0};
     }));
-    toast("✅ Booking approved! Renter has been notified.");
+    toast("✅ Booking approved!");
   };
 
   const handleRejectBooking = async (booking) => {
     const { error } = await supabase.from('bookings')
       .update({ status: 'rejected' })
-      .eq('id', booking.id);
-    if (error) { toast('❌ ' + error.message); return; }
+      .eq('id', booking.id)
+      .eq('listing_id', booking.listing_id);
+    if (error) { toast('❌ Reject failed: ' + error.message); console.error(error); return; }
     setIncomingBookings(bs => bs.map(b => b.id===booking.id ? {...b, status:'rejected'} : b));
     toast("🚫 Booking rejected.");
   };
@@ -1806,12 +1839,16 @@ export default function Leasio() {
                   incomingBookings={incomingBookings}
                   onApprove={handleApproveBooking}
                   onReject={handleRejectBooking}
-                  onRefresh={() => {
-                    supabase.from('bookings')
+                  onRefresh={async () => {
+                    const { data: myListings } = await supabase
+                      .from('listings').select('id').eq('owner_id', currentUser.id);
+                    if (!myListings?.length) return;
+                    const ids = myListings.map(l => l.id);
+                    const { data } = await supabase.from('bookings')
                       .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
-                      .eq('owner_id', currentUser.id)
-                      .order('created_at', { ascending: false })
-                      .then(({ data }) => { if (data) setIncomingBookings(data); });
+                      .in('listing_id', ids)
+                      .order('created_at', { ascending: false });
+                    if (data) setIncomingBookings(data);
                   }}
                 />
               : <OrdersView orders={orders} setView={setView} onManageBooking={setManageOrder} onRateBooking={setRateOrder} />

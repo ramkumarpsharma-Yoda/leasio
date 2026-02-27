@@ -214,12 +214,7 @@ export async function fetchMyBookings(renterId) {
     .select(`*, listings:listing_id (id, title, emoji, listing_type, locality, city, full_address, contact_phone, owner_id, owner_name, photo_url)`)
     .eq('renter_id', renterId)
     .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('[fetchMyBookings] error:', error.message, error.code);
-    return []; // never throw — caller keeps existing orders state
-  }
-  if (!data || data.length === 0) return [];
+  if (error) throw error;
 
   return data.map(b => ({
     id: b.id,
