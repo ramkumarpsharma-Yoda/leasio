@@ -396,7 +396,7 @@ const BookingModal = ({ listing, onClose, onBooked }) => {
         handler: function() {
           const order = {
             id:"ord"+Date.now(), listing, total, fee, dep,
-            mode:bookForm.mode, depositStatus:"held",
+            mode:bookForm.mode, status:"pending_handover", depositStatus:"held",
             ownerAddress: listing.full_address||listing.locality+", "+(listing.city||"Bengaluru"),
             ownerPhone:   listing.contact_phone||"+91 98765 43210",
             ownerName:    listing.owner||"Owner",
@@ -1348,7 +1348,7 @@ const BrowseView = ({ filtered, allCats, search, setSearch, locality, setLocalit
 };
 
 // ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
-const OwnerDashboard = ({ listings, incomingBookings, onApprove, onReject, onRefresh }) => {
+const OwnerDashboard = ({ listings, incomingBookings, onApprove, onReject }) => {
   const [tab, setTab] = useState("requests");
   const F = "'DM Sans',sans-serif";
 
@@ -1414,13 +1414,7 @@ const OwnerDashboard = ({ listings, incomingBookings, onApprove, onReject, onRef
 
   return (
     <div style={{ fontFamily:F, maxWidth:860, margin:"0 auto", padding:24 }}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-        <div style={{ fontWeight:900, fontSize:22 }}>Owner Dashboard</div>
-        <button onClick={onRefresh}
-          style={{ background:"#1C1F27", border:"1px solid #252830", borderRadius:8, padding:"7px 14px", color:"#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:F }}>
-          🔄 Refresh
-        </button>
-      </div>
+      <div style={{ fontWeight:900, fontSize:22, marginBottom:4 }}>Owner Dashboard</div>
       <div style={{ color:"#6B7280", fontSize:13, marginBottom:20 }}>Manage booking requests for your listings</div>
 
       {/* My listings summary */}
@@ -1528,6 +1522,23 @@ export default function Leasio() {
         if (data) setIncomingBookings(data);
       });
 
+    // Realtime — owner sees new requests instantly without refresh
+    const channel = supabase.channel('owner-bookings')
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'bookings',
+        filter: `owner_id=eq.${currentUser.id}`
+      }, (payload) => {
+        console.log("[realtime] booking change:", payload);
+        setIncomingBookings(prev => {
+          const exists = prev.find(b => b.id === payload.new.id);
+          if (exists) return prev.map(b => b.id === payload.new.id ? {...b, ...payload.new} : b);
+          return [payload.new, ...prev];
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+
     supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
       .then(async ({ data }) => {
         // Always get the authoritative date from auth.users server-side —
@@ -1546,31 +1557,6 @@ export default function Leasio() {
           setUserProfile(profile);
         }
       });
-  }, [currentUser]);
-
-  // Realtime subscription for owner incoming bookings — separate useEffect so cleanup works
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const fetchIncoming = () => {
-      supabase.from('bookings')
-        .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
-        .eq('owner_id', currentUser.id)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => { if (data) setIncomingBookings(data); });
-    };
-
-    const channel = supabase.channel(`owner-${currentUser.id}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'bookings',
-        filter: `owner_id=eq.${currentUser.id}`
-      }, () => {
-        // Re-fetch with full join so listing emoji/title are included
-        fetchIncoming();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, [currentUser]);
 
   useEffect(() => {
@@ -1806,13 +1792,6 @@ export default function Leasio() {
                   incomingBookings={incomingBookings}
                   onApprove={handleApproveBooking}
                   onReject={handleRejectBooking}
-                  onRefresh={() => {
-                    supabase.from('bookings')
-                      .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
-                      .eq('owner_id', currentUser.id)
-                      .order('created_at', { ascending: false })
-                      .then(({ data }) => { if (data) setIncomingBookings(data); });
-                  }}
                 />
               : <OrdersView orders={orders} setView={setView} onManageBooking={setManageOrder} onRateBooking={setRateOrder} />
       }
