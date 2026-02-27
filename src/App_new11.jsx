@@ -1517,27 +1517,7 @@ export default function Leasio() {
       .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
       .eq('owner_id', currentUser.id)
       .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        console.log("[incomingBookings] fetch:", data, error);
-        if (data) setIncomingBookings(data);
-      });
-
-    // Realtime — owner sees new requests instantly without refresh
-    const channel = supabase.channel('owner-bookings')
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'bookings',
-        filter: `owner_id=eq.${currentUser.id}`
-      }, (payload) => {
-        console.log("[realtime] booking change:", payload);
-        setIncomingBookings(prev => {
-          const exists = prev.find(b => b.id === payload.new.id);
-          if (exists) return prev.map(b => b.id === payload.new.id ? {...b, ...payload.new} : b);
-          return [payload.new, ...prev];
-        });
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+      .then(({ data }) => { if (data) setIncomingBookings(data); });
 
     supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
       .then(async ({ data }) => {
@@ -1614,16 +1594,13 @@ export default function Leasio() {
   const handleBooked = async (order) => {
     if (!guardBook()) return;
     if (currentUser && order.listing.id && typeof order.listing.id==="string") {
-      // ownerId comes from mapListing which maps row.owner_id → ownerId
-      const ownerId = order.listing.ownerId || order.listing.owner_id || null;
-      console.log("[handleBooked] listing:", order.listing.id, "ownerId:", ownerId, "renter:", currentUser.id);
       try {
-        const {data: newBooking, error:e} = await supabase.from('bookings').insert([{
+        const {error:e} = await supabase.from('bookings').insert([{
           listing_id:    order.listing.id,
           renter_id:     currentUser.id,
-          owner_id:      ownerId,
+          owner_id:      order.listing.ownerId || order.listing.owner_id || null,
           booking_type:  order.listing.listingType,
-          status:        'pending_approval',
+          status:        'pending_approval',          // owner must approve first
           start_date:    order.date||null,
           slot:          order.slot||null,
           hours:         order.hours||null,
@@ -1637,14 +1614,9 @@ export default function Leasio() {
           renter_address:order.renterAddress,
           owner_address: order.ownerAddress||null,
           owner_phone:   order.ownerPhone||null,
-        }]).select().single();
-        if (e) {
-          console.error("[handleBooked] insert error:", e);
-          toast('⚠️ Saved locally: '+e.message);
-        } else {
-          console.log("[handleBooked] saved to DB:", newBooking);
-        }
-      } catch(err) { console.error("[handleBooked] exception:", err); }
+        }]);
+        if (e) toast('⚠️ Saved locally: '+e.message);
+      } catch(err) { console.error(err); }
     }
     setOrders(o=>[...o,{...order, status:'pending_approval'}]);
     toast("📨 Booking request sent! Waiting for owner approval.");
