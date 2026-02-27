@@ -1639,69 +1639,60 @@ export default function Leasio() {
   const handleBooked = async (order) => {
     if (!guardBook()) return;
 
+    // Close venue/item detail page immediately — setSelected must be cleared
     setSelected(null);
     setBookingModal(null);
 
-    if (!currentUser || !order.listing.id || typeof order.listing.id !== "string") {
-      // Seed/demo listing — just add locally
-      setOrders(o => [...o, { ...order, status: 'pending_approval' }]);
-      toast("📨 Booking request sent!");
-      setView("orders");
-      return;
+    if (currentUser && order.listing.id && typeof order.listing.id === "string") {
+      const ownerId = order.listing.ownerId || order.listing.owner_id || null;
+      console.log("[handleBooked] listing_id:", order.listing.id, "ownerId:", ownerId);
+      try {
+        const { data: newBooking, error: e } = await supabase.from('bookings').insert([{
+          listing_id:     order.listing.id,
+          renter_id:      currentUser.id,
+          owner_id:       ownerId,
+          booking_type:   order.listing.listingType,
+          status:         'pending_approval',
+          start_date:     order.date   || null,
+          slot:           order.slot   || null,
+          hours:          order.hours  || null,
+          qty:            order.qty    || 1,
+          delivery_mode:  order.mode   || 'self',
+          total_rent:     order.total,
+          platform_fee:   order.fee,
+          deposit_amount: order.dep,
+          renter_name:    order.renterName,
+          renter_phone:   order.renterPhone,
+          renter_address: order.renterAddress,
+          owner_address:  order.ownerAddress || null,
+          owner_phone:    order.ownerPhone   || null,
+        }]).select().single();
+
+        if (e) {
+          console.error("[handleBooked] DB error:", e.message, e.code);
+          toast('⚠️ Could not save booking: ' + e.message);
+        } else {
+          console.log("[handleBooked] saved:", newBooking?.id);
+          // Immediately refresh renter's own bookings from DB
+          fetchMyBookings(currentUser.id).then(data => { if (data.length) setOrders(data); });
+          // Refresh owner dashboard by listing_id (works even if owner_id col is null)
+          const myListingIds = listings
+            .filter(l => l.ownerId === currentUser.id || l.owner_id === currentUser.id)
+            .map(l => l.id);
+          if (myListingIds.length) {
+            supabase.from('bookings')
+              .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
+              .in('listing_id', myListingIds)
+              .order('created_at', { ascending: false })
+              .then(({ data }) => { if (data) setIncomingBookings(data); });
+          }
+        }
+      } catch (err) {
+        console.error("[handleBooked] exception:", err);
+      }
     }
 
-    const ownerId = order.listing.ownerId || order.listing.owner_id || null;
-    console.log("[handleBooked] listing_id:", order.listing.id, "ownerId:", ownerId, "renter:", currentUser.id);
-
-    const { data: newBooking, error: insertError } = await supabase.from('bookings').insert([{
-      listing_id:     order.listing.id,
-      renter_id:      currentUser.id,
-      owner_id:       ownerId,
-      booking_type:   order.listing.listingType,
-      status:         'pending_approval',
-      start_date:     order.date   || null,
-      slot:           order.slot   || null,
-      hours:          order.hours  || null,
-      qty:            order.qty    || 1,
-      delivery_mode:  order.mode   || 'self',
-      total_rent:     order.total,
-      platform_fee:   order.fee,
-      deposit_amount: order.dep,
-      renter_name:    order.renterName,
-      renter_phone:   order.renterPhone,
-      renter_address: order.renterAddress,
-      owner_address:  order.ownerAddress || null,
-      owner_phone:    order.ownerPhone   || null,
-    }]).select().single();
-
-    if (insertError) {
-      // Show the REAL error message on screen so we can debug
-      console.error("[handleBooked] INSERT FAILED:", insertError);
-      toast(`❌ Booking failed: ${insertError.message} (code: ${insertError.code})`);
-      // Still add to local state so renter sees it this session
-      setOrders(o => [...o, { ...order, status: 'pending_approval' }]);
-      setView("orders");
-      return;
-    }
-
-    console.log("[handleBooked] saved to DB:", newBooking?.id, "status:", newBooking?.status);
-
-    // Refresh renter's bookings from DB
-    fetchMyBookings(currentUser.id).then(data => {
-      if (data.length > 0) setOrders(data);
-    });
-
-    // Refresh owner dashboard
-    supabase.from('listings').select('id').eq('owner_id', ownerId || '').then(({ data: ownerListings }) => {
-      if (!ownerListings?.length) return;
-      supabase.from('bookings')
-        .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
-        .in('listing_id', ownerListings.map(l => l.id))
-        .order('created_at', { ascending: false })
-        .then(({ data }) => { if (data) setIncomingBookings(data); });
-    });
-
-    setOrders(o => [...o, { ...order, id: newBooking.id, status: 'pending_approval' }]);
+    setOrders(o => [...o, { ...order, status: 'pending_approval' }]);
     toast("📨 Booking request sent! Waiting for owner approval.");
     setView("orders");
   };
