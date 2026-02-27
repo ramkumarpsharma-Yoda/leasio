@@ -1149,11 +1149,10 @@ const OrdersView = ({ orders, setView, onManageBooking, onRateBooking }) => (
 );
 
 // ─── ITEM DETAIL ──────────────────────────────────────────────────────────────
-const ItemDetail = ({ item, setSelected, setBookingModal, setBuyModal, currentUser }) => {
+const ItemDetail = ({ item, setSelected, setBookingModal, setBuyModal }) => {
   const [reviews, setReviews] = useState([]);
   const lt = item.listingType;
   const ts = typeStyle[lt];
-  const isOwnListing = currentUser && (item.ownerId === currentUser.id || item.owner_id === currentUser.id);
 
   useEffect(() => {
     if (typeof item.id !== 'string') return;
@@ -1278,27 +1277,17 @@ const ItemDetail = ({ item, setSelected, setBookingModal, setBuyModal, currentUs
         </div>
 
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          {isOwnListing ? (
-            <div style={{ width:"100%", background:"#1C1F27", border:"1px solid #252830", borderRadius:10, padding:"12px 16px", display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:20 }}>🏷️</span>
-              <div>
-                <div style={{ fontWeight:700, fontSize:13, color:"#F0EEE8" }}>This is your listing</div>
-                <div style={{ fontSize:11, color:"#6B7280", marginTop:2 }}>You can't book your own item. Manage it from the Owner tab.</div>
-              </div>
-            </div>
-          ) : <>
-            {lt==="item"&&(item.subtype==="rent"||item.subtype==="both")&&item.availableQty>0&&(
-              <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>🔑 Rent Securely</Btn>
-            )}
-            {lt!=="item"&&item.availableQty!==0&&(
-              <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>
-                {lt==="venue"?"📅 Reserve Venue":"📋 Book Session"}
-              </Btn>
-            )}
-            {lt==="item"&&item.buyPrice&&(item.subtype==="buy"||item.subtype==="both")&&(
-              <Btn variant="success" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBuyModal(item)}>🛒 Buy Now — {fmt(item.buyPrice)}</Btn>
-            )}
-          </>}
+          {lt==="item"&&(item.subtype==="rent"||item.subtype==="both")&&item.availableQty>0&&(
+            <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>🔑 Rent Securely</Btn>
+          )}
+          {lt!=="item"&&item.availableQty!==0&&(
+            <Btn variant="primary" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBookingModal(item)}>
+              {lt==="venue"?"📅 Reserve Venue":"📋 Book Session"}
+            </Btn>
+          )}
+          {lt==="item"&&item.buyPrice&&(item.subtype==="buy"||item.subtype==="both")&&(
+            <Btn variant="success" style={{ flex:1, minWidth:140, padding:"11px 18px" }} onClick={() => setBuyModal(item)}>🛒 Buy Now — {fmt(item.buyPrice)}</Btn>
+          )}
         </div>
       </div>
     </div>
@@ -1347,136 +1336,6 @@ const BrowseView = ({ filtered, allCats, search, setSearch, locality, setLocalit
   );
 };
 
-// ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
-const OwnerDashboard = ({ listings, incomingBookings, onApprove, onReject }) => {
-  const [tab, setTab] = useState("requests");
-  const F = "'DM Sans',sans-serif";
-
-  const pending   = incomingBookings.filter(b => b.status === 'pending_approval');
-  const approved  = incomingBookings.filter(b => ['pending_handover','active','completed'].includes(b.status));
-  const rejected  = incomingBookings.filter(b => b.status === 'rejected');
-
-  const statusBadge = (s) => {
-    const map = {
-      pending_approval:  { color:"#F59E0B", bg:"#F59E0B15", label:"⏳ Awaiting your approval" },
-      pending_handover:  { color:"#6366F1", bg:"#6366F115", label:"✅ Approved — awaiting handover" },
-      active:            { color:"#10B981", bg:"#10B98115", label:"🔄 Active rental" },
-      completed:         { color:"#9CA3AF", bg:"#9CA3AF15", label:"✔ Completed" },
-      rejected:          { color:"#EF4444", bg:"#EF444415", label:"🚫 Rejected" },
-      cancelled:         { color:"#6B7280", bg:"#6B728015", label:"↩ Cancelled" },
-    };
-    const m = map[s] || { color:"#9CA3AF", bg:"#9CA3AF15", label:s };
-    return <span style={{ fontSize:10, fontWeight:700, color:m.color, background:m.bg, borderRadius:6, padding:"2px 8px" }}>{m.label}</span>;
-  };
-
-  const BookingCard = ({ b, showActions }) => (
-    <div style={{ background:"#13151C", border:"1px solid #1E2130", borderRadius:12, padding:16, marginBottom:12 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8, marginBottom:10 }}>
-        <div>
-          <div style={{ fontWeight:700, fontSize:14, color:"#F0EEE8", marginBottom:2 }}>
-            {b.listings?.emoji} {b.listings?.title || "Listing"}
-          </div>
-          <div style={{ fontSize:11, color:"#6B7280" }}>{b.listings?.locality}</div>
-        </div>
-        {statusBadge(b.status)}
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px,1fr))", gap:10, marginBottom:showActions?14:0 }}>
-        {[
-          ["👤 Renter", b.renter_name || "—"],
-          ["📞 Phone",  b.renter_phone || "—"],
-          ["📅 Date",   b.start_date ? new Date(b.start_date).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "—"],
-          ["⏰ Slot",   b.slot || (b.hours ? b.hours+"h" : "—")],
-          ["💰 Amount", b.total_rent ? `₹${Number(b.total_rent).toLocaleString("en-IN")}` : "—"],
-          ["🏠 Address", b.renter_address || "—"],
-        ].map(([label, val]) => (
-          <div key={label} style={{ background:"#0E1016", borderRadius:8, padding:"8px 10px" }}>
-            <div style={{ fontSize:10, color:"#6B7280", marginBottom:2 }}>{label}</div>
-            <div style={{ fontSize:12, color:"#F0EEE8", fontWeight:600, wordBreak:"break-word" }}>{val}</div>
-          </div>
-        ))}
-      </div>
-
-      {showActions && (
-        <div style={{ display:"flex", gap:8, marginTop:4 }}>
-          <button onClick={() => onApprove(b)}
-            style={{ flex:1, background:"#10B98120", border:"1.5px solid #10B981", borderRadius:9, padding:"9px 14px", color:"#10B981", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:F }}>
-            ✅ Approve Booking
-          </button>
-          <button onClick={() => onReject(b)}
-            style={{ flex:1, background:"#EF444415", border:"1.5px solid #EF4444", borderRadius:9, padding:"9px 14px", color:"#EF4444", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:F }}>
-            🚫 Reject
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div style={{ fontFamily:F, maxWidth:860, margin:"0 auto", padding:24 }}>
-      <div style={{ fontWeight:900, fontSize:22, marginBottom:4 }}>Owner Dashboard</div>
-      <div style={{ color:"#6B7280", fontSize:13, marginBottom:20 }}>Manage booking requests for your listings</div>
-
-      {/* My listings summary */}
-      {listings.length > 0 && (
-        <div style={{ background:"#13151C", border:"1px solid #1E2130", borderRadius:12, padding:16, marginBottom:20 }}>
-          <div style={{ fontSize:11, fontWeight:800, color:"#9CA3AF", letterSpacing:.7, textTransform:"uppercase", marginBottom:12 }}>Your Listings</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {listings.map(l => (
-              <div key={l.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"#0E1016", borderRadius:8 }}>
-                <span style={{ fontSize:20 }}>{l.emoji}</span>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:700, fontSize:13, color:"#F0EEE8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</div>
-                  <div style={{ fontSize:11, color:"#6B7280" }}>{l.locality}, {l.city}</div>
-                </div>
-                <span style={{ fontSize:10, fontWeight:700, color:l.available?"#10B981":"#EF4444", background:l.available?"#10B98115":"#EF444415", borderRadius:6, padding:"2px 8px", whiteSpace:"nowrap" }}>
-                  {l.available ? "● Active" : "● Unavailable"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div style={{ display:"flex", gap:6, marginBottom:18 }}>
-        {[
-          { id:"requests", label:`Requests`, count:pending.length },
-          { id:"approved", label:"Approved",  count:approved.length },
-          { id:"rejected", label:"Rejected",  count:rejected.length },
-        ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background:tab===t.id?"#F59E0B20":"#111318", border:`2px solid ${tab===t.id?"#F59E0B":"#252830"}`, borderRadius:9, padding:"7px 14px", cursor:"pointer", color:tab===t.id?"#F59E0B":"#9CA3AF", fontWeight:700, fontSize:12, fontFamily:F, display:"flex", alignItems:"center", gap:6 }}>
-            {t.label}
-            {t.count > 0 && <span style={{ background:tab===t.id?"#F59E0B":"#252830", color:tab===t.id?"#0C0E14":"#9CA3AF", borderRadius:"50%", width:18, height:18, fontSize:9, fontWeight:900, display:"inline-flex", alignItems:"center", justifyContent:"center" }}>{t.count}</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      {tab === "requests" && (
-        pending.length === 0
-          ? <div style={{ textAlign:"center", padding:"48px 24px", color:"#6B7280" }}>
-              <div style={{ fontSize:36, marginBottom:12 }}>📭</div>
-              <div style={{ fontWeight:700, color:"#9CA3AF" }}>No pending requests</div>
-              <div style={{ fontSize:13, marginTop:4 }}>New booking requests will appear here</div>
-            </div>
-          : pending.map(b => <BookingCard key={b.id} b={b} showActions={true} />)
-      )}
-      {tab === "approved" && (
-        approved.length === 0
-          ? <div style={{ textAlign:"center", padding:"48px 24px", color:"#6B7280" }}>No approved bookings yet</div>
-          : approved.map(b => <BookingCard key={b.id} b={b} showActions={false} />)
-      )}
-      {tab === "rejected" && (
-        rejected.length === 0
-          ? <div style={{ textAlign:"center", padding:"48px 24px", color:"#6B7280" }}>No rejected bookings</div>
-          : rejected.map(b => <BookingCard key={b.id} b={b} showActions={false} />)
-      )}
-    </div>
-  );
-};
-
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function Leasio() {
   const [listings,      setListings]      = useState([]);
@@ -1496,7 +1355,6 @@ export default function Leasio() {
   const [rateOrder,     setRateOrder]     = useState(null);
   const [userProfile,   setUserProfile]   = useState(null);
   const [showAadhaar,   setShowAadhaar]   = useState(false);
-  const [incomingBookings, setIncomingBookings] = useState([]);
 
   useEffect(() => {
     fetchListings().then(data => setListings(data.length?data:SEED)).catch(()=>setListings(SEED));
@@ -1511,13 +1369,6 @@ export default function Leasio() {
   useEffect(() => {
     if (!currentUser) return;
     fetchMyBookings(currentUser.id).then(setOrders).catch(console.error);
-
-    // Fetch incoming booking requests for owner dashboard
-    supabase.from('bookings')
-      .select(`*, listings:listing_id (id, title, emoji, listing_type, locality)`)
-      .eq('owner_id', currentUser.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => { if (data) setIncomingBookings(data); });
 
     supabase.from("user_profiles").select("*").eq("id", currentUser.id).single()
       .then(async ({ data }) => {
@@ -1592,15 +1443,14 @@ export default function Leasio() {
   };
 
   const handleBooked = async (order) => {
-    if (!guardBook()) return;
+    if (!guardBook()) return; // Aadhaar limit check
     if (currentUser && order.listing.id && typeof order.listing.id==="string") {
       try {
         const {error:e} = await supabase.from('bookings').insert([{
           listing_id:    order.listing.id,
           renter_id:     currentUser.id,
-          owner_id:      order.listing.ownerId || order.listing.owner_id || null,
           booking_type:  order.listing.listingType,
-          status:        'pending_approval',          // owner must approve first
+          status:        'pending_handover',
           start_date:    order.date||null,
           slot:          order.slot||null,
           hours:         order.hours||null,
@@ -1618,8 +1468,13 @@ export default function Leasio() {
         if (e) toast('⚠️ Saved locally: '+e.message);
       } catch(err) { console.error(err); }
     }
-    setOrders(o=>[...o,{...order, status:'pending_approval'}]);
-    toast("📨 Booking request sent! Waiting for owner approval.");
+    setOrders(o=>[...o,order]);
+    setListings(ls=>ls.map(l => {
+      if (l.id!==order.listing.id) return l;
+      const newQty=Math.max(0,l.availableQty-(order.qty||1));
+      return {...l, availableQty:newQty, available:newQty>0};
+    }));
+    toast("✅ Booking confirmed! Owner details unlocked.");
     setView("orders");
   };
 
@@ -1661,30 +1516,6 @@ export default function Leasio() {
     toast("⭐ Thanks! Your rating has been submitted and trust scores updated.");
   };
 
-  const handleApproveBooking = async (booking) => {
-    const { error } = await supabase.from('bookings')
-      .update({ status: 'pending_handover' })
-      .eq('id', booking.id);
-    if (error) { toast('❌ ' + error.message); return; }
-    setIncomingBookings(bs => bs.map(b => b.id===booking.id ? {...b, status:'pending_handover'} : b));
-    // Also decrement available qty on the listing
-    setListings(ls => ls.map(l => {
-      if (l.id !== booking.listing_id) return l;
-      const newQty = Math.max(0, (l.availableQty||1) - (booking.qty||1));
-      return {...l, availableQty: newQty, available: newQty > 0};
-    }));
-    toast("✅ Booking approved! Renter has been notified.");
-  };
-
-  const handleRejectBooking = async (booking) => {
-    const { error } = await supabase.from('bookings')
-      .update({ status: 'rejected' })
-      .eq('id', booking.id);
-    if (error) { toast('❌ ' + error.message); return; }
-    setIncomingBookings(bs => bs.map(b => b.id===booking.id ? {...b, status:'rejected'} : b));
-    toast("🚫 Booking rejected.");
-  };
-
   if (!currentUser) return <LoginScreen onLogin={(user, isNewSignup) => {
     setCurrentUser(user);
     if (isNewSignup) setTimeout(() => setShowAadhaar(true), 600); // slight delay so main UI renders first
@@ -1715,18 +1546,11 @@ export default function Leasio() {
       <div style={S.bar}>
         <div style={{ fontSize:19, fontWeight:900, color:"#F59E0B", letterSpacing:-1, cursor:"pointer", whiteSpace:"nowrap" }} onClick={() => { setView("browse"); setSelected(null); }}>🏪 Leasio</div>
         <div style={{ flex:1 }} />
-        {[{id:"browse",l:"Browse"},{id:"list",l:"+ List"},{id:"orders",l:"Orders"},{id:"owner",l:"Owner"}].map(t=>(
+        {[{id:"browse",l:"Browse"},{id:"list",l:"+ List"},{id:"orders",l:"Orders"}].map(t=>(
           <button key={t.id} style={S.nav(view===t.id&&!selected)} onClick={() => {
             if (t.id === "list" && !guardList()) return;
             setView(t.id); setSelected(null);
-          }}>
-            {t.l}
-            {t.id==="owner" && incomingBookings.filter(b=>b.status==='pending_approval').length > 0 && (
-              <span style={{ background:"#EF4444", color:"#fff", borderRadius:"50%", width:16, height:16, fontSize:9, fontWeight:900, display:"inline-flex", alignItems:"center", justifyContent:"center", marginLeft:4 }}>
-                {incomingBookings.filter(b=>b.status==='pending_approval').length}
-              </span>
-            )}
-          </button>
+          }}>{t.l}</button>
         ))}
         <button style={{ background:"none", border:"none", color:"#6B7280", fontSize:12, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}
           onClick={() => { supabase.auth.signOut(); setCurrentUser(null); }}>Sign Out</button>
@@ -1753,19 +1577,12 @@ export default function Leasio() {
       )}
 
       {selected
-        ? <ItemDetail item={selected} setSelected={setSelected} setBookingModal={setBookingModal} setBuyModal={setBuyModal} currentUser={currentUser} />
+        ? <ItemDetail item={selected} setSelected={setSelected} setBookingModal={setBookingModal} setBuyModal={setBuyModal} />
         : view==="browse"
           ? <BrowseView filtered={filtered} allCats={allCats} search={search} setSearch={setSearch} locality={locality} setLocality={setLocality} filterLT={filterLT} setFilterLT={setFilterLT} filterSale={filterSale} setFilterSale={setFilterSale} filterCat={filterCat} setFilterCat={setFilterCat} setSelected={setSelected} toast={toast} />
           : view==="list"
             ? <ListForm setListings={setListings} setView={setView} toast={toast} />
-            : view==="owner"
-              ? <OwnerDashboard
-                  listings={listings.filter(l => l.ownerId===currentUser.id || l.owner_id===currentUser.id)}
-                  incomingBookings={incomingBookings}
-                  onApprove={handleApproveBooking}
-                  onReject={handleRejectBooking}
-                />
-              : <OrdersView orders={orders} setView={setView} onManageBooking={setManageOrder} onRateBooking={setRateOrder} />
+            : <OrdersView orders={orders} setView={setView} onManageBooking={setManageOrder} onRateBooking={setRateOrder} />
       }
 
       {bookingModal&&<BookingModal listing={bookingModal} onClose={()=>setBookingModal(null)} onBooked={handleBooked} />}
