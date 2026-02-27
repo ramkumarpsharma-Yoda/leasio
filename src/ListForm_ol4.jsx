@@ -27,7 +27,7 @@ async function uploadToCloudinary(file) {
 const F = "'DM Sans', sans-serif";
 const inp = (err) => ({ background:"#111318", border:`1px solid ${err?"#EF4444":"#252830"}`, borderRadius:9, padding:"10px 13px", color:"#F0EEE8", fontSize:13, outline:"none", fontFamily:F, width:"100%", boxSizing:"border-box" });
 const Lbl = ({ text, field, errors }) => <span style={{ fontSize:11, fontWeight:700, letterSpacing:.7, textTransform:"uppercase", display:"block", marginBottom:5, color:errors?.[field]?"#EF4444":"#9CA3AF" }}>{text}{errors?.[field]?` — ${errors[field]}`:""}</span>;
-const Row = ({ children, cols="1fr 1fr", minW="180px" }) => <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fit, minmax(${minW}, 1fr))`, gap:12 }}>{children}</div>;
+const Row = ({ children, cols="1fr 1fr" }) => <div style={{ display:"grid", gridTemplateColumns:cols, gap:12 }}>{children}</div>;
 const SectionCard = ({ title, icon, children }) => (
   <div style={{ background:"#13151C", border:"1px solid #1E2130", borderRadius:14, padding:20, marginBottom:16 }}>
     {title && <div style={{ fontSize:12, fontWeight:800, color:"#9CA3AF", letterSpacing:.8, textTransform:"uppercase", marginBottom:14, display:"flex", alignItems:"center", gap:6 }}><span>{icon}</span>{title}</div>}
@@ -105,13 +105,6 @@ const ListForm = ({ setListings, setView, toast }) => {
   const [photos,     setPhotos]     = useState([]);
   const [errors,     setErrors]     = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [isMobile,   setIsMobile]   = useState(window.innerWidth < 860);
-
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 860);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
 
   const lt  = listForm.listingType;
   const ts  = typeStyle[lt];
@@ -169,15 +162,15 @@ const ListForm = ({ setListings, setView, toast }) => {
     <div style={{ fontFamily:F, background:"#0C0E14", minHeight:"100vh", paddingBottom:60 }}>
 
       {/* Header */}
-      <div style={{ background:"#13151C", borderBottom:"1px solid #1E2130", padding:"16px 20px", display:"flex", alignItems:isMobile?"flex-start":"center", justifyContent:"space-between", flexDirection:isMobile?"column":"row", gap:12 }}>
+      <div style={{ background:"#13151C", borderBottom:"1px solid #1E2130", padding:"18px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <div>
-          <div style={{ fontWeight:900, fontSize:isMobile?18:22, color:"#F0EEE8" }}>Create a Listing</div>
+          <div style={{ fontWeight:900, fontSize:22, color:"#F0EEE8" }}>Create a Listing</div>
           <div style={{ color:"#6B7280", fontSize:13, marginTop:2 }}>List an item, venue, or service for rent or sale</div>
         </div>
-        <div style={{ display:"flex", gap:8, width:isMobile?"100%":"auto" }}>
+        <div style={{ display:"flex", gap:8 }}>
           {[{v:"item",icon:"📦",l:"Item"},{v:"venue",icon:"🏟",l:"Venue"},{v:"service",icon:"👤",l:"Service"}].map(({v,icon,l}) => (
             <button key={v} onClick={()=>setListForm(f=>({...f,listingType:v}))}
-              style={{ flex:isMobile?1:undefined, background:lt===v?typeStyle[v].bg:"#111318", border:`2px solid ${lt===v?typeStyle[v].color:"#252830"}`, borderRadius:10, padding:"10px 16px", cursor:"pointer", color:lt===v?typeStyle[v].color:"#6B7280", fontFamily:F, fontWeight:700, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"all .15s" }}>
+              style={{ background:lt===v?typeStyle[v].bg:"#111318", border:`2px solid ${lt===v?typeStyle[v].color:"#252830"}`, borderRadius:10, padding:"10px 20px", cursor:"pointer", color:lt===v?typeStyle[v].color:"#6B7280", fontFamily:F, fontWeight:700, fontSize:13, display:"flex", alignItems:"center", gap:6, transition:"all .15s" }}>
               <span style={{ fontSize:18 }}>{icon}</span>{l}
             </button>
           ))}
@@ -185,7 +178,7 @@ const ListForm = ({ setListings, setView, toast }) => {
       </div>
 
       {/* Two-column grid */}
-      <div style={{ maxWidth:1200, margin:"0 auto", padding:isMobile?"16px 14px":"24px 24px", display:"grid", gridTemplateColumns:isMobile?"1fr":"minmax(0,1fr) 320px", gap:24, alignItems:"start" }}>
+      <div style={{ maxWidth:1200, margin:"0 auto", padding:"24px 24px", display:"grid", gridTemplateColumns:"minmax(0,1fr) 320px", gap:24, alignItems:"start" }}>
 
         {/* LEFT: form */}
         <div>
@@ -249,7 +242,7 @@ const ListForm = ({ setListings, setView, toast }) => {
                   ))}
                 </div>
               </div>
-              <Row minW="120px">
+              <Row cols="1fr 1fr 1fr">
                 {(listForm.subtype==="rent"||listForm.subtype==="both")&&<div><Lbl text="Rent / Day (₹) *" field="rentPrice" errors={errors} /><input type="number" style={inp(errors.rentPrice)} value={listForm.rentPrice} onChange={e=>{set("rentPrice")(e);clrErr("rentPrice");}} placeholder="500" /></div>}
                 {(listForm.subtype==="buy"||listForm.subtype==="both")&&<div><Lbl text="Sell Price (₹) *" field="buyPrice" errors={errors} /><input type="number" style={inp(errors.buyPrice)} value={listForm.buyPrice} onChange={e=>{set("buyPrice")(e);clrErr("buyPrice");}} placeholder="15000" /></div>}
                 {(listForm.subtype==="rent"||listForm.subtype==="both")&&<div><Lbl text="Security Deposit (₹)" field="" errors={{}} /><input type="number" style={inp(false)} value={listForm.deposit} onChange={set("deposit")} placeholder="2000" /></div>}
@@ -261,7 +254,7 @@ const ListForm = ({ setListings, setView, toast }) => {
             </>}
 
             {lt==="venue" && <>
-              <Row minW="120px">
+              <Row cols="1fr 1fr 1fr">
                 <div><Lbl text="Price / Hour (₹) *" field="priceHour" errors={errors} /><input type="number" style={inp(errors.priceHour)} value={listForm.priceHour} onChange={e=>{set("priceHour")(e);clrErr("priceHour");}} placeholder="2000" /></div>
                 <div><Lbl text="Half Day (₹)" field="" errors={{}} /><input type="number" style={inp(false)} value={listForm.priceHalfDay} onChange={set("priceHalfDay")} placeholder="7000" /></div>
                 <div><Lbl text="Full Day (₹)" field="" errors={{}} /><input type="number" style={inp(false)} value={listForm.priceFullDay} onChange={set("priceFullDay")} placeholder="12000" /></div>
@@ -318,23 +311,32 @@ const ListForm = ({ setListings, setView, toast }) => {
           </button>
         </div>
 
-        {/* RIGHT: sticky preview — desktop only */}
-        {!isMobile && (
-          <div>
-            <div style={{ position:"sticky", top:24 }}>
-              <div style={{ fontSize:11, fontWeight:700, color:"#6B7280", letterSpacing:.8, textTransform:"uppercase", marginBottom:10 }}>Live Preview</div>
-              <PreviewCard f={listForm} photos={photos} lt={lt} />
-              <div style={{ marginTop:16, background:"#13151C", border:"1px solid #1E2130", borderRadius:14, padding:16 }}>
-                <div style={{ fontSize:11, fontWeight:800, color:"#F59E0B", letterSpacing:.7, marginBottom:10 }}>💡 TIPS FOR MORE BOOKINGS</div>
-                {[["📸","Add 3+ photos — listings with photos get 3× more inquiries"],["✍️","Detailed description builds trust — mention condition and what's included"],["💰","Price competitively — check similar listings first"],["📍","Use the exact locality name people search for"]].map(([icon,tip])=>(
-                  <div key={tip} style={{ display:"flex", gap:8, marginBottom:8, fontSize:12, color:"#9CA3AF", lineHeight:1.5 }}><span style={{ flexShrink:0 }}>{icon}</span><span>{tip}</span></div>
-                ))}
-              </div>
+        {/* RIGHT: sticky preview */}
+        <div className="leasio-preview-col">
+          <div style={{ position:"sticky", top:24 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#6B7280", letterSpacing:.8, textTransform:"uppercase", marginBottom:10 }}>Live Preview</div>
+            <PreviewCard f={listForm} photos={photos} lt={lt} />
+            <div style={{ marginTop:16, background:"#13151C", border:"1px solid #1E2130", borderRadius:14, padding:16 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:"#F59E0B", letterSpacing:.7, marginBottom:10 }}>💡 TIPS FOR MORE BOOKINGS</div>
+              {[["📸","Add 3+ photos — listings with photos get 3× more inquiries"],["✍️","Detailed description builds trust — mention condition and what's included"],["💰","Price competitively — check similar listings first"],["📍","Use the exact locality name people search for"]].map(([icon,tip])=>(
+                <div key={tip} style={{ display:"flex", gap:8, marginBottom:8, fontSize:12, color:"#9CA3AF", lineHeight:1.5 }}><span style={{ flexShrink:0 }}>{icon}</span><span>{tip}</span></div>
+              ))}
             </div>
           </div>
-        )}
+        </div>
 
       </div>
+
+      {/* Responsive: hide preview column and collapse grid on mobile */}
+      <style>{`
+        @media (max-width: 860px) {
+          .leasio-preview-col { display: none !important; }
+        }
+        @media (max-width: 860px) {
+          [style*="minmax(0,1fr) 320px"] { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+
     </div>
   );
 };
